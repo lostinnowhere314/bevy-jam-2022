@@ -12,6 +12,7 @@ use bevy::{
 
 mod player;
 mod spells;
+mod sprite;
 
 // theme = combine
 fn main() {
@@ -24,6 +25,7 @@ fn main() {
 		.insert_resource(Msaa {samples: 1})
         .add_plugins(DefaultPlugins)
 		.add_plugin(player::PlayerPlugin)
+		.add_plugin(sprite::FacingSpritePlugin)
         .add_startup_system(setup)
         .run();
 }

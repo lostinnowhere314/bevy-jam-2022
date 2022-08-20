@@ -1,6 +1,7 @@
 
 use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
+use super::sprite;
 
 pub struct PlayerPlugin;
 
@@ -10,7 +11,6 @@ impl Plugin for PlayerPlugin {
 			.add_plugin(InputManagerPlugin::<Action>::default())
 			.add_startup_system(player_setup)
 			.add_system(player_movement)
-			.add_system(player_sprite_update.after(player_movement))
 			.add_system(update_player_animation.after(player_movement));
 	}
 }
@@ -53,6 +53,7 @@ fn player_setup(
 			parent
 				.spawn()
 				.insert(PlayerSpriteMarker)
+				.insert(sprite::FacingSpriteMarker)
 				.insert(AnimationTimer(Timer::from_seconds(1.0 / 7.0, true)))
 				.insert(AnimationNextState{
 					state: AnimationGeneralState::Idle,
@@ -60,52 +61,15 @@ fn player_setup(
 				})
 				.insert(AnimationCurrentState {
 					state: AnimationState::IdleRight, 
-					index:0,
+					index: 0,
 				})
-				.insert(SpriteOffset(Vec3::new(0.0, 24.0, 0.0)))
+				.insert(sprite::SpriteOffset(Vec3::new(0.0, 24.0, 0.0)))
 				.insert_bundle(SpriteSheetBundle {
 					texture_atlas,
 					..default()
 				});
 		});
 }
-
-#[derive(Component, Debug)]
-struct SpriteOffset(Vec3);
-
-
-// Make sprites look nice in our sort-of-3d environment
-fn player_sprite_update(
-	player_query: Query<&Transform, 
-		(With<Player>, Without<PlayerSpriteMarker>, Without<Camera>)>,
-	mut sprite_query: Query<(&mut Transform, Option<&SpriteOffset>),
-		(With<PlayerSpriteMarker>, Without<Player>, Without<Camera>)>,
-	camera_query: Query<&Transform, 
-		(With<Camera>, Without<Player>, Without<PlayerSpriteMarker>)>,
-) {
-	let player_position = player_query.single().translation;
-	let (mut sprite_transform, maybe_offset) = sprite_query.single_mut();
-	let sprite_offset = match maybe_offset {
-		Some(SpriteOffset(o)) => *o,
-		None => Vec3::ZERO,
-	};
-	
-	let camera_transform = camera_query.iter().next().expect("no camera found!");
-
-	// First we need to transform everything w.r.t the camera
-	let camera_inverse = Transform::from_matrix(
-		camera_transform.compute_matrix().inverse()
-	);
-	let player_camera_loc = camera_inverse * (player_position + camera_transform.rotation * sprite_offset);
-	
-	// Then, we want to set the sprite to be pixel-aligned
-	let target_position = player_camera_loc.round();
-	
-	// Then we adjust sprite positioning as needed
-	sprite_transform.rotation = camera_transform.rotation;
-	sprite_transform.translation = (*camera_transform * target_position) - player_position;
-}
-
 
 // Animation stuffs
 // NOTE: to generalize: turn this into a trait?
