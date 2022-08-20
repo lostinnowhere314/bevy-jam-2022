@@ -8,7 +8,6 @@ use bevy::{
 			texture::ImageSettings,
 		},
 };
-//use bevy_simple_state_machine::SimpleStateMachinePlugin;
 
 mod player;
 mod spells;
@@ -23,18 +22,13 @@ fn main() {
         .insert_resource(ImageSettings::default_nearest())
 		.insert_resource(Msaa {samples: 1})
         .add_plugins(DefaultPlugins)
-		//.add_plugin(SimpleStateMachinePlugin::new())
 		.add_plugin(player::PlayerPlugin)
         .add_startup_system(setup)
         .run();
 }
 
-const HALF_SIZE: f32 = 10.0;
-
 fn setup(
 	mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
 	asset_server: Res<AssetServer>,
 ) {
 	let orthographic_projection = OrthographicProjection {
