@@ -105,6 +105,10 @@ impl Plugin for Palletize {
 	}
 }
 
+// for finding/filtering out this camera if needed
+#[derive(Default, Component)]
+pub struct PostProcessCameraMarker;
+
 // this exists so that we can attach it to cameras elsewhere
 pub struct PostprocessRenderTarget {
 	target: Handle<Image>,
@@ -136,7 +140,7 @@ fn get_palette_image(palette: &Vec<Color>) -> Image {
 			label: None,
             size,
             dimension: TextureDimension::D3,
-            format: TextureFormat::Bgra8Unorm,
+            format: TextureFormat::Bgra8UnormSrgb,
             mip_level_count: 1,
             sample_count: 1,
             usage: TextureUsages::TEXTURE_BINDING

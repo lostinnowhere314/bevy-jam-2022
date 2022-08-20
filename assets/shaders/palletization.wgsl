@@ -17,6 +17,10 @@ fn round_space(val: f32, n: f32) -> f32 {
 	return floor(val * n)/(n - 1.0); 
 }
 
+fn round_space2(val: f32, n: f32) -> f32 { 
+	return (floor(n * val) + 0.5)/(n); 
+}
+
 @fragment
 fn fragment(
     @builtin(position) position: vec4<f32>,
@@ -25,8 +29,8 @@ fn fragment(
 	// screen position, coordinates go from 0 to 1
 	let uv = position.xy / vec2<f32>(view.width, view.height);
 	let rounded_uv = vec2<f32>(
-		round_space(uv.x, 320.0),
-		round_space(uv.y, 200.0),
+		round_space2(uv.x, 320.0),
+		round_space2(uv.y, 200.0),
 	);
 	
 	// this number needs to be the palette texture resolution
