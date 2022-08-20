@@ -1,4 +1,5 @@
 #![forbid(unsafe_code)]
+#![allow(clippy::type_complexity)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use bevy::{
@@ -29,7 +30,6 @@ fn main() {
 
 fn setup(
 	mut commands: Commands,
-	asset_server: Res<AssetServer>,
 ) {
 	let orthographic_projection = OrthographicProjection {
 		scale: 0.5,
@@ -41,7 +41,7 @@ fn setup(
 	};
 	
     commands.spawn_bundle(Camera2dBundle {
-		projection: orthographic_projection.into(),
+		projection: orthographic_projection,
         transform: Transform::from_xyz(0.0, 100., 200.0).looking_at(Vec3::new(0., 0., 0.), Vec3::Y),
         ..default()
     });

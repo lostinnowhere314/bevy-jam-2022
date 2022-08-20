@@ -64,7 +64,7 @@ fn player_setup(
 				})
 				.insert(SpriteOffset(Vec3::new(0.0, 24.0, 0.0)))
 				.insert_bundle(SpriteSheetBundle {
-					texture_atlas: texture_atlas,
+					texture_atlas,
 					..default()
 				});
 		});
@@ -169,12 +169,12 @@ impl AnimationState {
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-enum FacingDir {
+pub enum FacingDir {
 	Left,
 	Right
 }
 #[derive(Debug, PartialEq, Clone, Copy)]
-enum AnimationGeneralState {
+pub enum AnimationGeneralState {
 	Idle,
 	Walk,
 	//Casting,
