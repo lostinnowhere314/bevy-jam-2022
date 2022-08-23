@@ -128,12 +128,12 @@ impl AnimationState {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum FacingDir {
     Left,
     Right,
 }
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum AnimationGeneralState {
     Idle,
     Walk,
@@ -378,7 +378,7 @@ fn update_spell_casting(
     }
 
     // Check if we want to cast a spell (and aren't clicking on UI)
-    if let None = ui_mouse_target.0 {
+    if ui_mouse_target.0.is_none() {
         if action_state.just_pressed(Action::CastSpell) {
             if let Some(spell_data) = spell_queue.generate_spell() {
                 // Figure out where the mouse is pointing

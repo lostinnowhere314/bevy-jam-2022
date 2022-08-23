@@ -1,5 +1,8 @@
 #![forbid(unsafe_code)]
-#![allow(clippy::type_complexity)]
+#![allow(
+	clippy::type_complexity,
+	clippy::too_many_arguments,
+)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use bevy::{
