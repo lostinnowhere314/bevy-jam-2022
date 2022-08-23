@@ -1,2 +1,4 @@
 /target
-assets-pdn/layers
+/assets-dev/layers
+/wasm
+wasm-build.zip
