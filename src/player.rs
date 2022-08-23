@@ -378,50 +378,50 @@ fn update_spell_casting(
     }
 
     // Check if we want to cast a spell (and aren't clicking on UI)
-    if ui_mouse_target.0.is_none() {
-        if action_state.just_pressed(Action::CastSpell) {
-            if let Some(spell_data) = spell_queue.generate_spell() {
-                // Figure out where the mouse is pointing
-                let offset = Vec3::new(0.0, 16.0, 0.0);
-                let (camera, camera_transform) = camera_query.single();
-                let anim_state = anim_query.single();
+    if ui_mouse_target.0.is_none() && action_state.just_pressed(Action::CastSpell) {
+		if let Some(spell_data) = spell_queue.generate_spell() {
+			// Figure out where the mouse is pointing
+			let offset = Vec3::new(0.0, 16.0, 0.0);
+			let (camera, camera_transform) = camera_query.single();
+			let anim_state = anim_query.single();
 
-                let maybe_world_mouse_position = ui::get_cursor_world_position(
-                    windows,
-                    camera,
-                    camera_transform,
-                    offset,
-                    Vec3::Y,
-                );
+			let maybe_world_mouse_position = ui::get_cursor_world_position(
+				windows,
+				camera,
+				camera_transform,
+				offset,
+				Vec3::Y,
+			);
 
-                let maybe_aim_dir = match maybe_world_mouse_position {
-                    Some(mouse_pos) => {
-                        println!("{:?}", mouse_pos);
-                        (mouse_pos - transform.translation).try_normalize()
-                    }
-                    None => None,
-                };
+			let maybe_aim_dir = match maybe_world_mouse_position {
+				Some(mouse_pos) => {
+					println!("{:?}", mouse_pos);
+					(mouse_pos - transform.translation).try_normalize()
+				}
+				None => None,
+			};
 
-                let aim_dir = match maybe_aim_dir {
-                    Some(aim_dir) => Vec3::new(aim_dir.x, 0.0, aim_dir.z),
-                    None => match anim_state.facing_dir {
-                        FacingDir::Right => Vec3::new(1.0, 0.0, 0.0),
-                        FacingDir::Left => Vec3::new(-1.0, 0.0, 0.0),
-                    },
-                };
+			let aim_dir = match maybe_aim_dir {
+				Some(aim_dir) => Vec3::new(aim_dir.x, 0.0, aim_dir.z),
+				None => match anim_state.facing_dir {
+					FacingDir::Right => Vec3::new(1.0, 0.0, 0.0),
+					FacingDir::Left => Vec3::new(-1.0, 0.0, 0.0),
+				},
+			};
 
-                spells::create_spell(
-                    &mut commands,
-                    spell_data,
-                    transform.translation,
-                    aim_dir,
-                    offset,
-                    all_spell_sprites,
-                );
-            }
-            spell_queue.clear();
-        }
-    }
+			spells::create_spell(
+				&mut commands,
+				spell_data,
+				transform.translation,
+				aim_dir,
+				offset,
+				all_spell_sprites,
+			);
+		}
+		spell_queue.clear();
+    } else if action_state.just_pressed(Action::CancelSpell) {
+		spell_queue.clear();
+	}
 }
 
 // Input handling
@@ -434,6 +434,7 @@ pub enum Action {
     Run,
     Dodge,
     CastSpell,
+    CancelSpell,
     OpenInventory,
     SpellComp0,
     SpellComp1,
@@ -462,6 +463,7 @@ fn get_input_map() -> InputMap<Action> {
         (KeyCode::E, Action::SpellComp4),
     ])
     .insert(MouseButton::Left, Action::CastSpell)
+    .insert(MouseButton::Right, Action::CancelSpell)
     .build()
 }
 
