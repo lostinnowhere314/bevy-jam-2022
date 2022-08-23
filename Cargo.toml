@@ -12,3 +12,11 @@ leafwing-input-manager = "0.5.0"
 # Optimize dependencies
 [profile.dev.package."*"]
 opt-level = 3
+
+[profile.wasm-release]
+# Use release profile as default values
+inherits = "release"
+
+# Optimize with size in mind, also try "s", sometimes it is better.
+# This doesn't increase compilation times compared to -O3, great improvements
+opt-level = "z"
