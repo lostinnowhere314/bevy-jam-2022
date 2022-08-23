@@ -1,4 +1,4 @@
-use super::{spells, sprite, ui};
+use super::{spells, sprite, ui, physics};
 use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
 
@@ -8,7 +8,7 @@ impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugin(InputManagerPlugin::<Action>::default())
             .add_startup_system(player_setup)
-            .add_system(player_movement)
+            .add_system(player_movement.before(physics::update_movement))
             .add_system(update_spell_casting)
             .add_system(update_player_animation.after(player_movement));
     }
@@ -37,7 +37,7 @@ fn player_setup(
     commands
         .spawn()
         .insert(Player)
-        .insert(PlayerSpeed(Vec3::ZERO))
+        .insert(physics::Speed(Vec3::ZERO))
         .insert_bundle(InputManagerBundle::<Action> {
             action_state: ActionState::default(),
             input_map: get_input_map(),
@@ -50,7 +50,7 @@ fn player_setup(
                 .spawn()
                 .insert(PlayerSpriteMarker)
                 .insert(sprite::FacingSpriteMarker)
-                .insert(AnimationTimer(Timer::from_seconds(1.0 / 7.0, true)))
+                .insert(sprite::AnimationTimer(Timer::from_seconds(1.0 / 7.0, true)))
                 .insert(AnimationNextState {
                     state: AnimationGeneralState::Idle,
                     facing_dir: FacingDir::Right,
@@ -172,10 +172,7 @@ fn get_animation_state(
     }
 }
 
-// All of these are needed for it to function
-#[derive(Component, Deref, DerefMut)]
-struct AnimationTimer(Timer);
-// TODO make this one have a vec of the next states to look at
+// TODO make this one have a vec of the next states to look at?
 #[derive(Component, Debug)]
 pub struct AnimationNextState {
     state: AnimationGeneralState,
@@ -200,7 +197,7 @@ fn update_player_animation(
     time: Res<Time>,
     mut query: Query<
         (
-            &mut AnimationTimer,
+            &mut sprite::AnimationTimer,
             &mut AnimationCurrentState,
             &mut AnimationNextState,
             &mut TextureAtlasSprite,
@@ -209,14 +206,9 @@ fn update_player_animation(
     >,
     spell_ui_active: Res<ui::SpellUiActive>,
 ) {
-    if spell_ui_active.0 {
-        for (mut timer, _current_state, _next_state, _sprite) in &mut query {
-            timer.pause();
-        }
-    } else {
+    if !spell_ui_active.0  {
         for (mut timer, mut current_state, mut next_state, mut sprite) in &mut query {
             // update timer
-            timer.unpause();
             timer.tick(time.delta());
             // Determine if the next animation should interrupt the current one
             let next_transition_state =
@@ -264,7 +256,7 @@ struct PlayerSpeed(Vec3);
 
 fn player_movement(
     action_state: Query<&ActionState<Action>, With<Player>>,
-    mut player_query: Query<(&mut Transform, &mut PlayerSpeed), With<Player>>,
+    mut player_query: Query<(&mut Transform, &mut physics::Speed), With<Player>>,
     mut anim_query: Query<&mut AnimationNextState, With<PlayerSpriteMarker>>,
     time: Res<Time>,
     spell_ui_active: Res<ui::SpellUiActive>,
@@ -296,9 +288,6 @@ fn player_movement(
 
     speed.0.x = update_speed(speed.0.x, target_speed.x, time.delta_seconds());
     speed.0.z = update_speed(speed.0.z, target_speed.z, time.delta_seconds());
-
-    // Update position
-    transform.translation += speed.0 * time.delta_seconds();
 
     // Update animation info
     if speed.0.x > 0.1 {
@@ -360,28 +349,79 @@ fn update_speed(current_speed: f32, target_speed: f32, delta: f32) -> f32 {
 
 // Spellcasting
 fn update_spell_casting(
-    mut query: Query<(&ActionState<Action>, &mut spells::RuneCastQueue)>,
+	mut commands: Commands,
+    mut query: Query<(&Transform, &ActionState<Action>, &mut spells::RuneCastQueue), With<Player>>,
+	anim_query: Query<&AnimationNextState, With<PlayerSpriteMarker>>,
+	camera_query: Query<(&Camera, &GlobalTransform)>,
     equipped: Res<spells::EquippedRunes>,
     spell_ui_active: Res<ui::SpellUiActive>,
+	all_spell_sprites: Res<spells::AllSpellSprites>,
+	ui_mouse_target: Res<ui::CurrentMouseoverTarget>,
+	windows: Res<Windows>,
 ) {
     // Don't do anything if the spell UI is open
     if spell_ui_active.0 {
         return;
     }
 
-    let (action_state, mut spell_queue) = query.single_mut();
+    let (transform, action_state, mut spell_queue) = query.single_mut();
 
     // Find which ones to add
     for (idx, comp_action) in SPELL_COMP_ACTIONS.iter().enumerate() {
         if action_state.just_pressed(*comp_action) {
-            println!("{:?}", idx);
             if let Some(Some(rune)) = equipped.0.get(idx as usize) {
-                spell_queue.add_rune(*rune);
+                spell_queue.push(*rune);
             } else {
                 println!("No component available to add")
             }
         }
     }
+	
+	// Check if we want to cast a spell (and aren't clicking on UI)
+	if let None = ui_mouse_target.0 {
+		if action_state.just_pressed(Action::CastSpell) {
+			if let Some(spell_data) = spell_queue.generate_spell() {
+				// Figure out where the mouse is pointing
+				let offset = Vec3::new(0.0, 16.0, 0.0);
+				let (camera, camera_transform) = camera_query.single();
+				let anim_state = anim_query.single();
+				
+				let maybe_world_mouse_position = ui::get_cursor_world_position(
+					windows, 
+					camera, 
+					camera_transform, 
+					offset, 
+					Vec3::Y
+				);
+				
+				let maybe_aim_dir = match maybe_world_mouse_position {
+					Some(mouse_pos) => {
+						println!("{:?}", mouse_pos);
+						(mouse_pos - transform.translation).try_normalize()
+					},
+					None => None
+				};
+				
+				let aim_dir = match maybe_aim_dir {
+					Some(aim_dir) => Vec3::new(aim_dir.x, 0.0, aim_dir.z),
+					None => match anim_state.facing_dir {
+						FacingDir::Right => Vec3::new(1.0, 0.0, 0.0),
+						FacingDir::Left => Vec3::new(-1.0, 0.0, 0.0),
+					}
+				};
+				
+				spells::create_spell(
+					&mut commands,
+					spell_data,
+					transform.translation,
+					aim_dir,
+					offset,
+					all_spell_sprites
+				);
+			}
+			spell_queue.clear();
+		}
+	}
 }
 
 // Input handling
@@ -393,7 +433,7 @@ pub enum Action {
     Down,
     Run,
     Dodge,
-    //CastSpell,
+    CastSpell,
     OpenInventory,
     SpellComp0,
     SpellComp1,
@@ -420,8 +460,8 @@ fn get_input_map() -> InputMap<Action> {
         (KeyCode::Key3, Action::SpellComp2),
         (KeyCode::Q, Action::SpellComp3),
         (KeyCode::E, Action::SpellComp4),
-        //(MouseButton::Left, Action::CastSpell),
-    ])
+    ]).insert(MouseButton::Left, Action::CastSpell)
+		.build()
 }
 
 const SPELL_COMP_ACTIONS: [Action; 5] = [

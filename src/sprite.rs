@@ -1,4 +1,5 @@
 use bevy::{prelude::*, transform::transform_propagate_system};
+use super::ui;
 
 #[derive(Component, Debug)]
 pub struct FacingSpriteMarker;
@@ -11,9 +12,14 @@ pub struct FacingSpritePlugin;
 impl Plugin for FacingSpritePlugin {
     fn build(&self, app: &mut App) {
         app.add_system_to_stage(
-            CoreStage::PostUpdate,
-            facing_sprite_update.before(transform_propagate_system),
-        );
+				CoreStage::PostUpdate,
+				facing_sprite_update.before(transform_propagate_system),
+			)
+			.add_system(simple_animation_update)
+			.add_system_to_stage(
+				CoreStage::PreUpdate,
+				pause_animation_timers
+			);
     }
 }
 
@@ -50,3 +56,58 @@ fn facing_sprite_update(
         }
     }
 }
+
+
+
+#[derive(Component, Deref, DerefMut)]
+pub struct AnimationTimer(pub Timer);
+/// Simple looping animations
+/// bool is whether animation should go forward
+#[derive(Component)]
+pub struct SimpleAnimationMarker(pub bool);
+
+fn simple_animation_update(
+    time: Res<Time>,
+	mut query: Query<(&SimpleAnimationMarker, &mut AnimationTimer, &mut TextureAtlasSprite, &Handle<TextureAtlas>)>,
+    spell_ui_active: Res<ui::SpellUiActive>,
+	texture_atlases: Res<Assets<TextureAtlas>>,
+) {
+	if spell_ui_active.0 {
+		return;
+	}
+	
+	for (marker, mut timer, mut sprite, handle) in query.iter_mut() {
+		timer.tick(time.delta());
+		if timer.just_finished() {
+			if let Some(texture_atlas) = texture_atlases.get(handle) {
+				sprite.index = if marker.0 {
+					(sprite.index + 1) % texture_atlas.textures.len()
+				} else {
+					let index = sprite.index as i64 - 1;
+					if index >= 0 {
+						sprite.index - 1
+					} else {
+						texture_atlas.textures.len() - 1
+					}
+				} 
+			}
+		}
+	}
+}
+
+fn pause_animation_timers(
+	mut query: Query<&mut AnimationTimer>,
+	spell_ui_active: Res<ui::SpellUiActive>
+) {
+	if spell_ui_active.0 {
+		for mut timer in query.iter_mut() {
+			timer.pause();
+		}
+	} else {
+		for mut timer in query.iter_mut() {
+			timer.unpause();
+		}
+	}
+}
+
+

@@ -1,5 +1,8 @@
 use super::player;
-use bevy::prelude::*;
+use bevy::{
+	prelude::*,
+	math::Vec4Swizzles,
+};
 use leafwing_input_manager::prelude::*;
 
 pub struct UIPlugin;
@@ -67,6 +70,7 @@ fn setup_spell_ui(
 
     let rune_slot_handle = asset_server.load("ui/spell-slot.png");
 
+	// TODO actually make the UI we want
     // Spawn the ui element
     let entity = commands
         .spawn_bundle(ImageBundle {
@@ -136,7 +140,7 @@ impl MouseoverTargetSpace {
 
 // Resource for current mouseover target. None if there is not any.
 #[derive(Debug)]
-pub struct CurrentMouseoverTarget(Option<(MouseoverTarget, Entity)>);
+pub struct CurrentMouseoverTarget(pub Option<(MouseoverTarget, Entity)>);
 
 // Mouse interaction, to determine if we are clicking on UI
 #[derive(Debug, Clone, Copy)]
@@ -146,10 +150,53 @@ pub enum MouseoverTarget {
 }
 
 /// Gets the position of the cursor if in the primary window
-fn get_cursor_position(windows: Res<Windows>) -> Option<Vec2> {
+pub fn get_cursor_position(windows: Res<Windows>) -> Option<Vec2> {
     let raw_pos = windows.get_primary()?.cursor_position()?;
     Some(Vec2::new(raw_pos.x, 400.0 - raw_pos.y))
 }
+
+/// Gets the intersection of the cursor ray with the plane containing the 
+/// point `plane_point` with normal `plane_normal`.
+/// Returns None if the cursor is not in the window.
+/// (this is here because get_cursor_position is)
+#[allow(non_snake_case)]
+pub fn get_cursor_world_position(
+	windows: Res<Windows>,
+	camera: &Camera,
+	camera_transform: &GlobalTransform,
+	plane_point: Vec3,
+	plane_normal: Vec3,
+) -> Option<Vec3> {
+	let cursor_screen_pos = get_cursor_position(windows)?;
+	
+	let scaled_screen_pos = Vec2::new(
+		(cursor_screen_pos.x - 320.0) / 320.0,
+		(200.0 - cursor_screen_pos.y) / 200.0,
+	);
+	
+	// funny linear algebra time
+	let A = camera.projection_matrix() * camera_transform.compute_matrix().inverse();
+	
+	let x: Vec4 = scaled_screen_pos.extend(0.0).extend(0.0);
+	let n: Vec3 = plane_normal.normalize();
+	let n_hat: Vec4 = n.extend(0.0);
+	let p: Vec3 = plane_point;
+	
+	let rhs = A.transpose() * x + n_hat * n.dot(p);
+	let lhs = A.transpose() * A + outer_product(n_hat, n_hat); 
+	
+	Some((lhs.inverse() * rhs).xyz())
+}
+
+fn outer_product(left: Vec4, other: Vec4) -> Mat4 {
+	Mat4::from_cols(
+		left * other.x,
+		left * other.y,
+		left * other.z,
+		left * other.w,
+	)
+}
+
 
 // System to keep track of what the mouse is over
 fn update_cursor_ui_target(

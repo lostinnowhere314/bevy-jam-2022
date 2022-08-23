@@ -11,6 +11,7 @@ mod player;
 mod spells;
 mod sprite;
 mod ui;
+mod physics;
 
 // theme = combine
 fn main() {
@@ -26,6 +27,7 @@ fn main() {
         .add_plugin(player::PlayerPlugin)
         .add_plugin(sprite::FacingSpritePlugin)
         .add_plugin(spells::SpellPlugin)
+		.add_plugin(physics::GeneralPhysicsPlugin)
         .add_plugin(ui::UIPlugin)
         .add_startup_system(setup)
         .run();
