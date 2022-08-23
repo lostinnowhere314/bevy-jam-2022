@@ -1,4 +1,4 @@
-use super::{spells, sprite, ui, physics};
+use super::{physics, spells, sprite, ui};
 use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
 
@@ -206,7 +206,7 @@ fn update_player_animation(
     >,
     spell_ui_active: Res<ui::SpellUiActive>,
 ) {
-    if !spell_ui_active.0  {
+    if !spell_ui_active.0 {
         for (mut timer, mut current_state, mut next_state, mut sprite) in &mut query {
             // update timer
             timer.tick(time.delta());
@@ -349,15 +349,15 @@ fn update_speed(current_speed: f32, target_speed: f32, delta: f32) -> f32 {
 
 // Spellcasting
 fn update_spell_casting(
-	mut commands: Commands,
+    mut commands: Commands,
     mut query: Query<(&Transform, &ActionState<Action>, &mut spells::RuneCastQueue), With<Player>>,
-	anim_query: Query<&AnimationNextState, With<PlayerSpriteMarker>>,
-	camera_query: Query<(&Camera, &GlobalTransform)>,
+    anim_query: Query<&AnimationNextState, With<PlayerSpriteMarker>>,
+    camera_query: Query<(&Camera, &GlobalTransform)>,
     equipped: Res<spells::EquippedRunes>,
     spell_ui_active: Res<ui::SpellUiActive>,
-	all_spell_sprites: Res<spells::AllSpellSprites>,
-	ui_mouse_target: Res<ui::CurrentMouseoverTarget>,
-	windows: Res<Windows>,
+    all_spell_sprites: Res<spells::AllSpellSprites>,
+    ui_mouse_target: Res<ui::CurrentMouseoverTarget>,
+    windows: Res<Windows>,
 ) {
     // Don't do anything if the spell UI is open
     if spell_ui_active.0 {
@@ -376,52 +376,52 @@ fn update_spell_casting(
             }
         }
     }
-	
-	// Check if we want to cast a spell (and aren't clicking on UI)
-	if let None = ui_mouse_target.0 {
-		if action_state.just_pressed(Action::CastSpell) {
-			if let Some(spell_data) = spell_queue.generate_spell() {
-				// Figure out where the mouse is pointing
-				let offset = Vec3::new(0.0, 16.0, 0.0);
-				let (camera, camera_transform) = camera_query.single();
-				let anim_state = anim_query.single();
-				
-				let maybe_world_mouse_position = ui::get_cursor_world_position(
-					windows, 
-					camera, 
-					camera_transform, 
-					offset, 
-					Vec3::Y
-				);
-				
-				let maybe_aim_dir = match maybe_world_mouse_position {
-					Some(mouse_pos) => {
-						println!("{:?}", mouse_pos);
-						(mouse_pos - transform.translation).try_normalize()
-					},
-					None => None
-				};
-				
-				let aim_dir = match maybe_aim_dir {
-					Some(aim_dir) => Vec3::new(aim_dir.x, 0.0, aim_dir.z),
-					None => match anim_state.facing_dir {
-						FacingDir::Right => Vec3::new(1.0, 0.0, 0.0),
-						FacingDir::Left => Vec3::new(-1.0, 0.0, 0.0),
-					}
-				};
-				
-				spells::create_spell(
-					&mut commands,
-					spell_data,
-					transform.translation,
-					aim_dir,
-					offset,
-					all_spell_sprites
-				);
-			}
-			spell_queue.clear();
-		}
-	}
+
+    // Check if we want to cast a spell (and aren't clicking on UI)
+    if let None = ui_mouse_target.0 {
+        if action_state.just_pressed(Action::CastSpell) {
+            if let Some(spell_data) = spell_queue.generate_spell() {
+                // Figure out where the mouse is pointing
+                let offset = Vec3::new(0.0, 16.0, 0.0);
+                let (camera, camera_transform) = camera_query.single();
+                let anim_state = anim_query.single();
+
+                let maybe_world_mouse_position = ui::get_cursor_world_position(
+                    windows,
+                    camera,
+                    camera_transform,
+                    offset,
+                    Vec3::Y,
+                );
+
+                let maybe_aim_dir = match maybe_world_mouse_position {
+                    Some(mouse_pos) => {
+                        println!("{:?}", mouse_pos);
+                        (mouse_pos - transform.translation).try_normalize()
+                    }
+                    None => None,
+                };
+
+                let aim_dir = match maybe_aim_dir {
+                    Some(aim_dir) => Vec3::new(aim_dir.x, 0.0, aim_dir.z),
+                    None => match anim_state.facing_dir {
+                        FacingDir::Right => Vec3::new(1.0, 0.0, 0.0),
+                        FacingDir::Left => Vec3::new(-1.0, 0.0, 0.0),
+                    },
+                };
+
+                spells::create_spell(
+                    &mut commands,
+                    spell_data,
+                    transform.translation,
+                    aim_dir,
+                    offset,
+                    all_spell_sprites,
+                );
+            }
+            spell_queue.clear();
+        }
+    }
 }
 
 // Input handling
@@ -460,8 +460,9 @@ fn get_input_map() -> InputMap<Action> {
         (KeyCode::Key3, Action::SpellComp2),
         (KeyCode::Q, Action::SpellComp3),
         (KeyCode::E, Action::SpellComp4),
-    ]).insert(MouseButton::Left, Action::CastSpell)
-		.build()
+    ])
+    .insert(MouseButton::Left, Action::CastSpell)
+    .build()
 }
 
 const SPELL_COMP_ACTIONS: [Action; 5] = [
