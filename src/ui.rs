@@ -1,5 +1,5 @@
-use super::player;
-use bevy::{math::Vec4Swizzles, prelude::*};
+use super::{player, spells};
+use bevy::{math::Vec4Swizzles, prelude::*, utils::HashMap};
 use leafwing_input_manager::prelude::*;
 
 pub struct UIPlugin;
@@ -12,16 +12,55 @@ impl Plugin for UIPlugin {
             .add_startup_system(setup_spell_ui)
             .add_system(update_spell_ui_visibility)
             .add_system(toggle_spell_ui)
+			.add_system(update_rune_ui_displays)
+			.add_system(update_selection_rune_containers.before(update_rune_ui_displays))
             .add_system_to_stage(CoreStage::PreUpdate, update_cursor_ui_target);
     }
 }
 
-// Whether a UI element is active or not
-#[derive(Component, Debug)]
-pub struct UiActive(bool);
-
-// Keeps track of whether the spell inventory UI is active.
+/// Keeps track of whether the spell inventory UI is active.
 pub struct SpellUiActive(pub bool);
+
+/// Component for updating ui rune sprites. Recommended to put on a child entity.(probably)
+#[derive(Debug, Component, Deref)]
+pub struct UiRuneContainer(pub Option<spells::Rune>);
+/// Component for updating the above for selected runes
+#[derive(Debug, Component)]
+pub struct SelectedRuneContainer(pub usize);
+/// Resource to store rune sprites
+#[derive(Debug, Deref)]
+pub struct RuneUiSprites(pub HashMap<spells::Rune, Handle<Image>>);
+
+/// Updates sprites based off of containers
+fn update_rune_ui_displays(
+	mut query: Query<(&UiRuneContainer, &mut UiImage, &mut Visibility)>,
+	sprites: Res<RuneUiSprites>,
+) {
+	for (rune_container, mut image, mut visibility) in query.iter_mut() {
+		let maybe_image_handle = match rune_container.0 {
+			Some(rune) => sprites.get(&rune),
+			None => None
+		};
+		
+		if let Some(image_handle) = maybe_image_handle {
+			image.0 = image_handle.clone();
+			visibility.is_visible = true;
+		} else {
+			visibility.is_visible = false;
+		}
+		
+	}
+}
+
+/// Updates containers based off of the selected runes
+fn update_selection_rune_containers(
+	mut query: Query<(&SelectedRuneContainer, &mut UiRuneContainer)>,
+	equipped: Res<spells::EquippedRunes>
+) {
+	for (index_container, mut rune_container) in query.iter_mut() {
+		rune_container.0 = *equipped.0.get(index_container.0).expect("invalid SelectedRuneContainer index encountered (must be in 0..4)");
+	}
+}
 
 /// Mark as part of the spell UI. if inventory_page is true, will only show when inventory is open.
 #[derive(Component, Debug)]
@@ -50,11 +89,11 @@ fn toggle_spell_ui(
     }
 }
 
-const SPELL_SLOT_SIZE: f32 = 20.0;
+const SPELL_SLOT_SIZE: i32 = 20;
 
-fn get_scaled_size(w: f32, h: f32) -> Node {
+fn get_scaled_size(w: i32, h: i32) -> Node {
     Node {
-        size: Vec2::new(w, h) * 2.0,
+        size: Vec2::new(w as f32, h as f32) * 2.0,
     }
 }
 
@@ -66,6 +105,110 @@ fn setup_spell_ui(
     let mut new_mouseover_targets = Vec::<MouseoverTargetSpace>::new();
 
     let rune_slot_handle = asset_server.load("ui/spell-slot.png");
+
+	// Selected rune slots
+	let spell_slot_file_paths = [
+		"ui/spell-slot-1.png",
+		"ui/spell-slot-2.png",
+		"ui/spell-slot-3.png",
+		"ui/spell-slot-q.png",
+		"ui/spell-slot-e.png",
+	];
+	
+	for (i, &path) in spell_slot_file_paths.iter().enumerate() {
+		let image_handle: Handle<Image> = asset_server.load(path);
+		
+		// When UI is closed
+		commands
+			.spawn_bundle(NodeBundle {
+				node: get_scaled_size(20, 28),
+				style: Style {
+					position_type: PositionType::Absolute,
+					position: UiRect {
+						top: Val::Px(4.0),
+						left: Val::Px(640.0 - (4.0 + (4-i + 1) as f32 * 44.0)),
+						..default()
+					},
+					..default()
+				},
+				..default()
+			})
+			.insert(SpellSelectUi{ inventory_page: false})
+			.with_children(|parent| {
+				// Inner node for actually displaying things
+				parent
+					.spawn_bundle(ImageBundle {
+						node: get_scaled_size(20, 28),
+						style: Style {
+							position_type: PositionType::Absolute,
+							position: UiRect {
+								top: Val::Px(0.0),
+								left: Val::Px(0.0),
+								..default()
+							},
+							..default()
+						},
+						image: UiImage(asset_server.load(path)),
+						..default()
+					});
+				parent
+					.spawn_bundle(ImageBundle {
+						node: get_scaled_size(16, 16),
+						style: Style {
+							position_type: PositionType::Absolute,
+							position: UiRect {
+								top: Val::Px(4.0),
+								left: Val::Px(4.0),
+								..default()
+							},
+							..default()
+						},
+						image: UiImage(asset_server.load("no-sprite.png")),
+						visibility: Visibility { is_visible: false },
+						..default()
+					})
+					.insert(UiRuneContainer(None))
+					.insert(SelectedRuneContainer(i));
+			});
+			
+		/*commands
+			.spawn_bundle(ImageBundle {
+				node: get_scaled_size(20, 26),
+				style: Style {
+					position_type: PositionType::Absolute,
+					position: UiRect {
+						top: Val::Px(4.0),
+						right: Val::Px(4.0 + (4-i) as f32 * 44.0),
+						..default()
+					},
+					..default()
+				},
+				image: UiImage(asset_server.load(path)),
+				..default()
+			})
+			.insert(SpellSelectUi{ inventory_page: false})
+			.with_children(|parent| {
+				// Inner node for displaying runes
+				parent
+					.spawn_bundle(ImageBundle {
+						node: get_scaled_size(16, 16),
+						style: Style {
+							position_type: PositionType::Relative,
+							position: UiRect {
+								top: Val::Px(4.0),
+								left: Val::Px(4.0),
+								..default()
+							},
+							..default()
+						},
+						image: UiImage(asset_server.load("no-sprite.png")),
+						visibility: Visibility { is_visible: false },
+						..default()
+					})
+					.insert(UiRuneContainer(None))
+					.insert(SelectedRuneContainer(i));
+			});*/
+	}
 
     // TODO actually make the UI we want
     // Spawn the ui element
@@ -94,9 +237,9 @@ fn setup_spell_ui(
         target: MouseoverTarget::SpellSelectedSlot(0),
         top: 10.0,
         left: 10.0,
-        width: SPELL_SLOT_SIZE * 2.0,
-        height: SPELL_SLOT_SIZE * 2.0,
-        parent_entity: entity,
+        width: SPELL_SLOT_SIZE as f32 * 2.0,
+        height: SPELL_SLOT_SIZE as f32 * 2.0,
+        source_entity: entity,
     });
     //... (in a loop probably)
 
@@ -122,7 +265,7 @@ struct MouseoverTargetSpace {
     left: f32,
     width: f32,
     height: f32,
-    parent_entity: Entity,
+    source_entity: Entity,
 }
 
 impl MouseoverTargetSpace {
@@ -207,9 +350,9 @@ fn update_cursor_ui_target(
             for target in &targets.0 {
                 // Check if the mouse is inside this target
                 if target.contains(pos) {
-                    if let Ok(visibility) = query.get(target.parent_entity) {
+                    if let Ok(visibility) = query.get(target.source_entity) {
                         if visibility.is_visible {
-                            result = Some((target.target, target.parent_entity));
+                            result = Some((target.target, target.source_entity));
                             break;
                         }
                     }

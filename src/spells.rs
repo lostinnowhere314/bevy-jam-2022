@@ -1,4 +1,4 @@
-use super::{physics, sprite};
+use super::{physics, sprite, ui};
 use bevy::{prelude::*, utils::HashMap};
 
 pub struct SpellPlugin;
@@ -10,9 +10,13 @@ impl Plugin for SpellPlugin {
         equipped_runes.set(0, Some(Rune::ElementRune(SpellElement::Fire)));
 
         app.insert_resource(equipped_runes)
-            .add_startup_system(setup_spell_sprites);
+            .add_startup_system(setup_spell_sprites)
+			.add_startup_system(setup_rune_sprites);
     }
 }
+
+
+
 
 // Define rune info ///////
 #[derive(Component, Debug, Deref, DerefMut)]
@@ -122,7 +126,7 @@ fn create_spell_recursive(runes: &[Rune]) -> Option<SpellData> {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum Rune {
     ElementRune(SpellElement),
     ShapeRune(SpellShape),
@@ -241,7 +245,7 @@ enum SpellSpriteSize {
     Large,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum SpellShape {
     NoShape,
     Orb,
@@ -314,6 +318,31 @@ impl AllSpellSprites {
     }
 }
 
+/// Load spell rune sprites (dealt with in ui.rs)
+fn setup_rune_sprites(
+	mut commands: Commands,
+    asset_server: Res<AssetServer>,
+) {
+	let sprite_data = [
+		(Rune::ShapeRune(SpellShape::Orb), "no-sprite.png"),
+		(Rune::ShapeRune(SpellShape::Line), "no-sprite.png"),
+		(Rune::ElementRune(SpellElement::Fire), "ui/rune-fire.png"),
+		(Rune::ElementRune(SpellElement::Water), "ui/rune-water.png"),
+		(Rune::ElementRune(SpellElement::Earth), "no-sprite.png"),
+		(Rune::ElementRune(SpellElement::Air), "no-sprite.png"),
+	];
+	
+    let mut sprite_map = HashMap::<Rune, Handle<Image>>::new();
+	
+	for (rune, path) in sprite_data.iter() {
+		let texture_handle = asset_server.load(*path);
+		sprite_map.insert(*rune, texture_handle);
+	}
+	
+    commands.insert_resource(ui::RuneUiSprites(sprite_map));
+}
+
+/// Load spell sprites (for projectiles)
 fn setup_spell_sprites(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
@@ -338,15 +367,7 @@ fn setup_spell_sprites(
             1,
             1,
         ),
-        (
-            SpellElement::Neutral,
-            SpellSpriteSize::Normal,
-            "no-sprite.png",
-            16,
-            16,
-            1,
-            1,
-        ),
+        (SpellElement::Neutral, SpellSpriteSize::Normal, "no-sprite.png", 16, 16, 1, 1),
         (
             SpellElement::Neutral,
             SpellSpriteSize::Large,
@@ -697,3 +718,4 @@ fn setup_spell_sprites(
 
     commands.insert_resource(AllSpellSprites(sprite_map));
 }
+
