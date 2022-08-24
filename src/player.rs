@@ -35,7 +35,7 @@ fn player_setup(
 
 	let collider = physics::Collider::Circle {
 		center: Vec2::ZERO,
-		radius: 8.0
+		radius: 5.0
 	};
 	
     // Spawn the player
