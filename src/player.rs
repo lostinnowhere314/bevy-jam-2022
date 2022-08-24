@@ -1,4 +1,4 @@
-use super::{physics, spells, sprite, ui};
+use super::{physics, spells, sprite, ui, collapse_vec3};
 use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
 
@@ -42,7 +42,7 @@ fn player_setup(
     commands
         .spawn()
         .insert(Player)
-        .insert(physics::Speed(Vec3::ZERO))
+        .insert(physics::Speed(Vec2::ZERO))
         .insert_bundle(InputManagerBundle::<Action> {
             action_state: ActionState::default(),
             input_map: get_input_map(),
@@ -265,7 +265,7 @@ struct PlayerSpeed(Vec3);
 
 fn player_movement(
     action_state: Query<&ActionState<Action>, With<Player>>,
-    mut player_query: Query<(&mut Transform, &mut physics::Speed), With<Player>>,
+    mut player_query: Query<&mut physics::Speed, With<Player>>,
     mut anim_query: Query<&mut AnimationNextState, With<PlayerSpriteMarker>>,
     time: Res<Time>,
     spell_ui_active: Res<ui::SpellUiActive>,
@@ -274,16 +274,16 @@ fn player_movement(
         return;
     }
     let action_state = action_state.single();
-    let (mut transform, mut speed) = player_query.single_mut();
+    let mut speed = player_query.single_mut();
     let mut anim_next_state = anim_query.single_mut();
 
-    let mut total_offset = Vec3::splat(0.0);
+    let mut total_offset = Vec2::splat(0.0);
 
     if action_state.pressed(Action::Up) {
-        total_offset.z -= 1.0;
+        total_offset.y -= 1.0;
     }
     if action_state.pressed(Action::Down) {
-        total_offset.z += 1.0;
+        total_offset.y += 1.0;
     }
     if action_state.pressed(Action::Right) {
         total_offset.x += 1.0;
@@ -296,7 +296,7 @@ fn player_movement(
     let target_speed = total_offset.normalize_or_zero() * SPEED;
 
     speed.0.x = update_speed(speed.0.x, target_speed.x, time.delta_seconds());
-    speed.0.z = update_speed(speed.0.z, target_speed.z, time.delta_seconds());
+    speed.0.y = update_speed(speed.0.y, target_speed.y, time.delta_seconds());
 
     // Update animation info
     if speed.0.x > 0.1 {
@@ -358,15 +358,14 @@ fn update_speed(current_speed: f32, target_speed: f32, delta: f32) -> f32 {
 
 // Spellcasting
 fn update_spell_casting(
-    mut commands: Commands,
     mut query: Query<(&Transform, &ActionState<Action>, &mut spells::RuneCastQueue), With<Player>>,
     anim_query: Query<&AnimationNextState, With<PlayerSpriteMarker>>,
     camera_query: Query<(&Camera, &GlobalTransform)>,
     equipped: Res<spells::EquippedRunes>,
     spell_ui_active: Res<ui::SpellUiActive>,
-    all_spell_sprites: Res<spells::AllSpellSprites>,
     ui_mouse_target: Res<ui::CurrentMouseoverTarget>,
     windows: Res<Windows>,
+	mut create_spell_events: EventWriter<spells::CreateSpellEvent>,
 ) {
     // Don't do anything if the spell UI is open
     if spell_ui_active.0 {
@@ -411,21 +410,20 @@ fn update_spell_casting(
 			};
 
 			let aim_dir = match maybe_aim_dir {
-				Some(aim_dir) => Vec3::new(aim_dir.x, 0.0, aim_dir.z),
+				Some(aim_dir) => collapse_vec3(aim_dir),
 				None => match anim_state.facing_dir {
-					FacingDir::Right => Vec3::new(1.0, 0.0, 0.0),
-					FacingDir::Left => Vec3::new(-1.0, 0.0, 0.0),
+					FacingDir::Right => Vec2::new(1.0, 0.0),
+					FacingDir::Left => Vec2::new(-1.0, 0.0),
 				},
 			};
-
-			spells::create_spell(
-				&mut commands,
+			
+			let start_pos = collapse_vec3(transform.translation) + 12.0 * aim_dir;
+			
+			create_spell_events.send(spells::CreateSpellEvent {
 				spell_data,
-				transform.translation,
-				aim_dir,
-				offset,
-				all_spell_sprites,
-			);
+				position: start_pos,
+				move_direction: aim_dir,
+			});
 		}
 		spell_queue.clear();
     } else if action_state.just_pressed(Action::CancelSpell) {

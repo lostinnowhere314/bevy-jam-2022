@@ -1,4 +1,4 @@
-use super::ui;
+use super::{ui, expand_vec2};
 use bevy::prelude::*;
 use std::marker::{Send, Sync, PhantomData};
 use std::ops::{Deref, DerefMut};
@@ -29,7 +29,7 @@ pub struct DamagesEnemies;
 pub struct TakesSpace;
 
 #[derive(Component, Deref, DerefMut, Debug)]
-pub struct Speed(pub Vec3);
+pub struct Speed(pub Vec2);
 
 // Movement should only be updated if menu is not open
 pub fn update_movement(
@@ -42,7 +42,7 @@ pub fn update_movement(
     }
     for (speed, mut transform) in query.iter_mut() {
         // Update position
-        transform.translation += speed.0 * time.delta_seconds();
+        transform.translation += expand_vec2(speed.0 * time.delta_seconds());
     }
 }
 
@@ -279,7 +279,7 @@ impl<T: Send + Sync + 'static> Plugin for CollisionPlugin<T> {
     fn build(&self, app: &mut App) {
         app
 			.insert_resource(ActiveCollisions::<T>::new())
-			.add_system_to_stage(CoreStage::PreUpdate, resolve_collisions::<T>);
+			.add_system_to_stage(CoreStage::PostUpdate, resolve_collisions::<T>);
     }
 }
 
@@ -315,7 +315,7 @@ impl<T: Send + Sync + 'static> Plugin for SymmetricCollisionPlugin<T> {
     fn build(&self, app: &mut App) {
         app
 			.insert_resource(ActiveCollisions::<T>::new())
-			.add_system_to_stage(CoreStage::PreUpdate, resolve_collisions_symmetric::<T>);
+			.add_system_to_stage(CoreStage::PostUpdate, resolve_collisions_symmetric::<T>);
     }
 }
 

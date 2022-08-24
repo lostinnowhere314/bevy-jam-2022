@@ -33,6 +33,7 @@ fn main() {
         .add_plugin(sprite::FacingSpritePlugin)
         .add_plugin(spells::SpellPlugin)
         .add_plugin(physics::GeneralPhysicsPlugin)
+		.add_plugin(enemy::EnemyPlugin)
         .add_plugin(ui::UIPlugin)
         .add_startup_system(setup)
         //.add_plugin(LogDiagnosticsPlugin::default())
@@ -55,4 +56,12 @@ fn setup(mut commands: Commands) {
         transform: Transform::from_xyz(0.0, 100., 200.0).looking_at(Vec3::new(0., 0., 0.), Vec3::Y),
         ..default()
     });
+}
+
+fn expand_vec2(vec: Vec2) -> Vec3 {
+	Vec3::new(vec.x, 0.0, vec.y)
+}
+
+fn collapse_vec3(vec: Vec3) -> Vec2 {
+	Vec2::new(vec.x, vec.z)
 }
