@@ -37,18 +37,131 @@ pub enum Collider {
 		center: Vec2,
 		radius: f32,
 	},
-	LineSegment {
-		// todo
-	}
+	LineSegment(Vec2, Vec2),
+	LineRay {
+		anchor: Vec2,
+		direction: Vec2,
+	},
+	ThickLineSegment {
+		point1: Vec2, 
+		point2: Vec2, 
+		thickness:f32
+	},
+}
+
+fn transform_in_plane(point: Vec2, transform: &Transform) -> Vec2 {
+	let pos_3d = Vec3::new(point.x, 0.0, point.y);
+	let tr_pos = *transform * pos_3d;
+	Vec2::new(tr_pos.x, tr_pos.z)
+}
+fn rotate_in_plane(point: Vec2, transform: &Transform) -> Vec2 {
+	let pos_3d = Vec3::new(point.x, 0.0, point.y);
+	let tr_pos = transform.rotation * pos_3d;
+	Vec2::new(tr_pos.x, tr_pos.z)
 }
 
 impl Collider {
+	/// Applies a transformation to the given collider.
+	/// Scaling is not supported (although it probably behaves somewhat ok sometimes)
 	fn with_transform(&self, transform: &Transform) -> Self {
-		unimplemented!()
+		match *self {
+			Self::Circle { center, radius } =>
+				Self::Circle {
+					center: transform_in_plane(center, transform),
+					radius: radius,
+				},
+			Self::LineSegment(point1, point2) => 
+				Self::LineSegment(
+					transform_in_plane(point1, transform),
+					transform_in_plane(point2, transform)
+				),
+			Self::LineRay {anchor, direction} => 
+				Self::LineRay {
+					anchor: transform_in_plane(anchor, transform),
+					direction: rotate_in_plane(direction, transform)
+				},
+			Self::ThickLineSegment { point1, point2, thickness } => 
+				Self::ThickLineSegment{
+					point1: transform_in_plane(point1, transform),
+					point2: transform_in_plane(point2, transform),
+					thickness 
+				},
+		}
 	}
 	
+	/// Tests if two colliders intersect.
 	fn intersects(&self, other: &Collider) -> bool {
-		unimplemented!()
+		match self {
+			Self::Circle {center: c1, radius: r1} => {
+				match other {
+					Self::Circle {center: c2, radius: r2} => { 
+						let rad_sum_sq = (r1+r2) * (r1+r2);
+						c1.distance_squared(*c2) <= rad_sum_sq
+					},
+					Self::LineSegment(point1, point2) => { 
+						let rad_sq = r1 * r1;
+						
+						point1.distance_squared(*c1) <= rad_sq
+						|| point2.distance_squared(*c1) <= rad_sq
+						|| {
+							let cir_rel_pos = *c1 - *point1;
+							let line_vec = *point2 - *point1;
+							let line_dir = line_vec.normalize_or_zero();
+							let line_length = line_vec.length();
+							
+							let cir_rej = cir_rel_pos.reject_from_normalized(line_dir);
+							let cir_proj_dot = cir_rel_pos.dot(line_dir);
+							
+							// Determine if close enough
+							cir_rej.length_squared() <= rad_sq
+							// Determine if the projection of the point lies on the segment
+							&& cir_proj_dot >= 0.0
+							&& cir_proj_dot <= line_length
+						}
+					},
+					Self::LineRay { anchor, direction } => {
+						let rad_sq = r1 * r1;
+						
+						anchor.distance_squared(*c1) <= rad_sq
+						|| {
+							let cir_rel_pos = *c1 - *anchor;
+							
+							let cir_rej = cir_rel_pos.reject_from(*direction);
+							let cir_proj_dot = cir_rel_pos.dot(*direction);
+							
+							// Determine if close enough
+							cir_rej.length_squared() <= rad_sq
+							// Determine if the projection of the point lies on the ray
+							&& cir_proj_dot >= 0.0
+						}
+					}
+					Self::ThickLineSegment { point1, point2, thickness } => { 
+						let max_dist_sq = (r1 + thickness) * (r1 + thickness);
+						
+						// Only test based on projection
+						let cir_rel_pos = *c1 - *point1;
+						let line_vec = *point2 - *point1;
+						let line_dir = line_vec.normalize_or_zero();
+						let line_length = line_vec.length();
+						
+						let cir_rej = cir_rel_pos.reject_from_normalized(line_dir);
+						let cir_proj_dot = cir_rel_pos.dot(line_dir);
+						
+						// Determine if close enough
+						cir_rej.length_squared() <= max_dist_sq
+						// Determine if the projection of the point lies on the segment
+						&& cir_proj_dot >= 0.0
+						&& cir_proj_dot <= line_length
+					},
+				}
+			},
+			_ => match other {
+				Self::Circle {..} => {
+					other.intersects(&self)
+				},
+				_ => panic!("intersection testing that does not involve a circle is unsupported")
+			}
+		}
 	}
 }
 
@@ -176,7 +289,19 @@ fn resolve_collisions_symmetric<T: Send + Sync + 'static> (
 	let sources_iter = process_collision_query(sources_query);
 	
 	for pair in sources_iter.iter().combinations(2) {
-		//check for collisions
+		if let (
+			Some((entity1, collider1)), 
+			Some((entity2, collider2))
+		) = (pair.first(), pair.last()) {
+			if collider1.intersects(&collider2) {
+				collisions.push(Collision {
+					source_entity: *entity1,
+					source_collider: collider1.clone(),
+					recip_entity: *entity2,
+					recip_collider: collider2.clone()
+				});
+			}
+		}
 	}
 }
 
