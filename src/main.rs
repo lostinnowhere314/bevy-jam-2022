@@ -16,6 +16,7 @@ mod player;
 mod spells;
 mod sprite;
 mod ui;
+mod enemy;
 
 // theme = combine
 fn main() {

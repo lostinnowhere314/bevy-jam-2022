@@ -1,7 +1,14 @@
 use super::ui;
 use bevy::{prelude::*, transform::transform_propagate_system};
 
-#[derive(Component, Debug)]
+#[derive(Bundle, Default)]
+pub struct FacingSpriteBundle {
+	marker: FacingSpriteMarker,
+	#[bundle]
+	spatial: SpatialBundle,
+}
+
+#[derive(Component, Debug, Default)]
 pub struct FacingSpriteMarker;
 #[derive(Component, Debug)]
 pub struct SpriteOffset(pub Vec3);

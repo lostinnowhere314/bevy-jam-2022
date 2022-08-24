@@ -398,10 +398,10 @@ fn setup_spell_sprites(
         (
             SpellElement::Fire,
             SpellSpriteSize::Normal,
-            "no-sprite.png",
+            "spells/fire-large.png",
             16,
-            16,
-            1,
+            32,
+            4,
             1,
         ),
         (
