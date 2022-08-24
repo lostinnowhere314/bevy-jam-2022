@@ -1,4 +1,4 @@
-use super::{physics, sprite, ui};
+use super::{physics, sprite, ui, enemy, expand_vec2};
 use bevy::{prelude::*, utils::HashMap};
 
 pub struct SpellPlugin;
@@ -10,13 +10,15 @@ impl Plugin for SpellPlugin {
         equipped_runes.set(0, Some(Rune::ElementRune(SpellElement::Fire)));
 
         app.insert_resource(equipped_runes)
+			.add_event::<SpellDespawnEvent>()
+			.add_event::<CreateSpellEvent>()
             .add_startup_system(setup_spell_sprites)
-			.add_startup_system(setup_rune_sprites);
+			.add_startup_system(setup_rune_sprites)
+			.add_system(process_spell_enemy_collisions)
+			.add_system(despawn_spells.after(process_spell_enemy_collisions))
+			.add_system(create_spells_from_events.after(process_spell_enemy_collisions));
     }
 }
-
-
-
 
 // Define rune info ///////
 #[derive(Component, Debug, Deref, DerefMut)]
@@ -35,7 +37,6 @@ impl RuneCastQueue {
 fn create_spell_recursive(runes: &[Rune]) -> Option<SpellData> {
     if !runes.is_empty() {
         let mut runes_iter = runes.iter().enumerate().peekable();
-        let mut spell_effects = Vec::<SpellEffect>::with_capacity(2);
 
         // Get current-layer shape data
         let layer_shape = if let Some((_, &Rune::ShapeRune(s))) = runes_iter.peek() {
@@ -48,7 +49,9 @@ fn create_spell_recursive(runes: &[Rune]) -> Option<SpellData> {
         let mut fire_water = 0;
         let mut earth_air = 0;
         let mut element_runes = 0;
-        let mut has_sub_spell = false;
+		
+		let mut maybe_on_impact = None::<Box<SpellData>>;
+		let mut maybe_on_disappear = None::<Box<SpellData>>;
 
         for (i, rune) in runes_iter {
             match rune {
@@ -56,13 +59,14 @@ fn create_spell_recursive(runes: &[Rune]) -> Option<SpellData> {
                     // Recursively determine the rest of the spell
                     // Only None if the rest of it does not evaluate to a spell with a proper effect
                     if let Some(sub_spell) = create_spell_recursive(&runes[i..]) {
-                        spell_effects.push(match layer_shape {
+                        match layer_shape {
                             SpellShape::NoShape | SpellShape::Line => {
-                                SpellEffect::CreateOnImpact(sub_spell)
+                                maybe_on_impact = Some(Box::new(sub_spell));
                             }
-                            SpellShape::Orb => SpellEffect::CreateOnDisappear(sub_spell),
-                        });
-                        has_sub_spell = true;
+                            SpellShape::Orb => {
+								maybe_on_disappear = Some(Box::new(sub_spell));
+							},
+                        }
                     }
                     break;
                 }
@@ -80,14 +84,16 @@ fn create_spell_recursive(runes: &[Rune]) -> Option<SpellData> {
                         SpellElement::Air => {
                             earth_air += 1;
                         }
-                        _ => {}
+                        _ => {
+							panic!("unexpected element rune encountered");
+						}
                     }
                     element_runes += 1;
                 }
             }
         }
 
-        if element_runes == 0 && !has_sub_spell {
+        if element_runes == 0 && maybe_on_impact.is_none() && maybe_on_disappear.is_none() {
             // This spell doesn't actually do anything
             None
         } else {
@@ -110,15 +116,18 @@ fn create_spell_recursive(runes: &[Rune]) -> Option<SpellData> {
                 } * multiplier
                     * (element_runes as f32).sqrt())
                 .round() as i32;
-            spell_effects.push(SpellEffect::Damage(damage));
 
             // Create the actual spell
             Some(SpellData {
-                element: element,
-                // TODO
+                element,
+				shape: layer_shape,
+                // TODO determine more dynamically
                 size: SpellSpriteSize::Normal,
-                shape: layer_shape,
-                effects: spell_effects,
+				damage: damage,
+				// TODO determine
+				mana_cost: 1,
+				on_collide: maybe_on_impact,
+				on_end: maybe_on_disappear,
             })
         }
     } else {
@@ -132,6 +141,7 @@ pub enum Rune {
     ShapeRune(SpellShape),
 }
 
+// Runes //////////////////////////////////////////////////////////////////////////////////////
 // Resource for holding equipped runes
 #[derive(Debug)]
 pub struct EquippedRunes(pub Vec<Option<Rune>>);
@@ -155,17 +165,33 @@ impl EquippedRunes {
 #[derive(Component, Debug)]
 pub struct RuneInventorySlot(pub Option<Rune>);
 
-// Defining spell info ///////
-#[derive(Debug)]
+// Spells //////////////////////////////////////////////////////////////////////////////////////
+#[derive(Component, Debug)]
+pub struct SpellMarker;
+
+// TODO maybe move component aspects into individual pieces
+#[derive(Debug, Component, Clone)]
 pub struct SpellData {
     element: SpellElement,
-    size: SpellSpriteSize,
     shape: SpellShape,
-    effects: Vec<SpellEffect>,
+    size: SpellSpriteSize,
+	damage: i32,
+	mana_cost: i32,
+	on_collide: Option<Box<SpellData>>,
+	on_end: Option<Box<SpellData>>,
+}
+
+#[derive(Debug)]
+struct SpellDespawnEvent(Entity);
+#[derive(Debug)]
+pub struct CreateSpellEvent {
+	pub spell_data: SpellData, 
+	pub position: Vec2,
+	pub move_direction: Vec2,
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-enum SpellElement {
+pub enum SpellElement {
     Neutral,
     Fire,
     Water,
@@ -179,18 +205,20 @@ enum SpellElement {
     Light,
 }
 
-const ALL_ELEMENTS: [SpellElement; 10] = [
-    SpellElement::Neutral,
-    SpellElement::Fire,
-    SpellElement::Water,
-    SpellElement::Earth,
-    SpellElement::Air,
-    SpellElement::Metal,
-    SpellElement::Plant,
-    SpellElement::Electric,
-    SpellElement::Ice,
-    SpellElement::Light,
-];
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SpellShape {
+    NoShape,
+    Orb,
+    Line,
+}
+
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+enum SpellSpriteSize {
+    Tiny,
+    Small,
+    Normal,
+    Large,
+}
 
 impl SpellElement {
     fn as_vec(&self) -> Vec2 {
@@ -237,72 +265,87 @@ impl SpellElement {
     }
 }
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-enum SpellSpriteSize {
-    Tiny,
-    Small,
-    Normal,
-    Large,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum SpellShape {
-    NoShape,
-    Orb,
-    Line,
-}
-
-#[derive(Debug)]
-enum SpellEffect {
-    Damage(i32),
-    CreateOnImpact(SpellData),
-    CreateOnDisappear(SpellData),
-}
-
-/// Function for spawning spells as projectiles
-/// NOT A SYSTEM
-/// Does nothing if movement_direction is zero-length
-pub fn create_spell(
-    commands: &mut Commands,
-    spell_data: SpellData,
-    spawn_position: Vec3,
-    movement_direction: Vec3,
-    sprite_offset: Vec3,
-    all_spell_sprites: Res<AllSpellSprites>,
+/// Resolve spell-enemy collisions
+// TODO update w/ on-collide
+fn process_spell_enemy_collisions(
+	spell_query: Query<&SpellData, With<SpellMarker>>,
+	mut enemy_query: Query<&mut enemy::EnemyHealth>,
+	collisions: Res<physics::ActiveCollisions<physics::DamagesEnemies>>,
+	mut spell_despawn_events: EventWriter<SpellDespawnEvent>,
 ) {
-    let texture_atlas = all_spell_sprites
-        .get(&spell_data)
-        .expect("failed to get spell projectile sprite")
-        .0
-        .clone();
+	for collision in collisions.iter() {
+		if let (Ok(spell_data), Ok(mut enemy_health)) = (spell_query.get(collision.source_entity), enemy_query.get_mut(collision.recip_entity)) {
+			println!("Collided with an enemy! :)");
+			
+			if spell_data.damage.is_positive() {
+				enemy_health.0 -= spell_data.damage;
+			}
+			println!("{:?}", enemy_health);
+			
+			spell_despawn_events.send(SpellDespawnEvent(collision.source_entity));
+		}
+	}
+}
 
-    let movement_direction = match movement_direction.try_normalize() {
-        Some(m) => m,
-        None => return,
-    };
+// TODO update to do the on-end part
+fn despawn_spells(
+	mut commands: Commands,
+	mut despawn_events: EventReader<SpellDespawnEvent>,
+) {
+	for event in despawn_events.iter() {
+		// TODO do stuff for spawning sub-projectiles, particles, &c
+		
+		commands.entity(event.0).despawn_recursive();
+	}
+}
 
-    // TODO temp
-    let speed = 300.0;
+fn create_spells_from_events(
+    mut commands: Commands,
+    all_spell_sprites: Res<AllSpellSprites>,
+	mut create_events: EventReader<CreateSpellEvent>
+) {
+	for event in create_events.iter() {
+		let texture_data = all_spell_sprites
+			.get(&event.spell_data)
+			.expect("failed to get spell projectile sprite");
 
-    commands
-        .spawn()
-        .insert_bundle(SpatialBundle {
-            transform: Transform::from_translation(spawn_position),
-            ..default()
-        })
-        .insert(physics::Speed(movement_direction * speed))
-        .with_children(|parent| {
-            parent
-                .spawn()
-                .insert(sprite::FacingSpriteMarker)
-                .insert(sprite::SimpleAnimationMarker(true))
-                .insert(sprite::AnimationTimer(Timer::from_seconds(1.0 / 7.0, true)))
-                .insert(sprite::SpriteOffset(Vec3::new(0.0, 24.0, 0.0)))
-                .insert_bundle(SpriteSheetBundle {
-                    texture_atlas,
-                    ..default()
-                });
-        });
+		let movement_direction = match event.move_direction.try_normalize() {
+			Some(m) => m,
+			None => continue,
+		};
+
+		// TODO determine dynamically
+		let speed = 100.0;
+
+		commands
+			.spawn()
+			.insert(SpellMarker)
+			.insert(event.spell_data.clone())
+			.insert(physics::CollisionSource::<physics::DamagesEnemies>::new(
+				physics::Collider::Circle {
+					center: Vec2::ZERO,
+					// TODO determine dynamically. prob best related to sprite data
+					radius: 8.0
+				}
+			))
+			.insert_bundle(SpatialBundle {
+				transform: Transform::from_translation(expand_vec2(event.position)),
+				..default()
+			})
+			.insert(physics::Speed(movement_direction * speed))
+			.with_children(|parent| {
+				parent
+					.spawn()
+					.insert(sprite::FacingSpriteMarker)
+					.insert(sprite::SimpleAnimationMarker(true))
+					.insert(sprite::AnimationTimer(Timer::from_seconds(1.0 / 7.0, true)))
+					.insert(sprite::SpriteOffset(Vec3::Y * texture_data.y_offset))
+					.insert_bundle(SpriteSheetBundle {
+						texture_atlas: texture_data.texture_atlas.clone(),
+						..default()
+					});
+			});
+	}
 }
 
 // Resource for spell sprites
@@ -310,7 +353,10 @@ pub fn create_spell(
 pub struct AllSpellSprites(HashMap<(SpellElement, SpellSpriteSize), SpellSpriteData>);
 // Store the small amount of needed animation info
 #[derive(Debug)]
-struct SpellSpriteData(Handle<TextureAtlas>);
+struct SpellSpriteData {
+	texture_atlas: Handle<TextureAtlas>, 
+	y_offset: f32
+}
 
 impl AllSpellSprites {
     fn get(&self, spell_data: &SpellData) -> Option<&SpellSpriteData> {
@@ -713,9 +759,25 @@ fn setup_spell_sprites(
             *nx,
             *ny,
         ));
-        sprite_map.insert((*element, *size), SpellSpriteData(texture_atlas));
+        sprite_map.insert((*element, *size), SpellSpriteData {
+			texture_atlas,
+			// TODO get from data list
+			y_offset: 24.0
+		});
     }
 
     commands.insert_resource(AllSpellSprites(sprite_map));
 }
 
+const ALL_ELEMENTS: [SpellElement; 10] = [
+    SpellElement::Neutral,
+    SpellElement::Fire,
+    SpellElement::Water,
+    SpellElement::Earth,
+    SpellElement::Air,
+    SpellElement::Metal,
+    SpellElement::Plant,
+    SpellElement::Electric,
+    SpellElement::Ice,
+    SpellElement::Light,
+];
