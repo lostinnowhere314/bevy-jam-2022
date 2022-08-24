@@ -5,7 +5,7 @@ pub struct SpellPlugin;
 
 impl Plugin for SpellPlugin {
     fn build(&self, app: &mut App) {
-        // temp for testing
+        // TODO temp for testing
         let mut equipped_runes = EquippedRunes::new();
         equipped_runes.set(0, Some(Rune::ElementRune(SpellElement::Fire)));
 
@@ -15,8 +15,13 @@ impl Plugin for SpellPlugin {
             .add_startup_system(setup_spell_sprites)
 			.add_startup_system(setup_rune_sprites)
 			.add_system(process_spell_enemy_collisions)
-			.add_system(despawn_spells.after(process_spell_enemy_collisions))
-			.add_system(create_spells_from_events.after(process_spell_enemy_collisions));
+			.add_system_to_stage(
+				CoreStage::PostUpdate,
+				despawn_spells
+					.before(physics::resolve_collisions::<physics::DamagesEnemies>)
+			)
+			.add_system(create_spells_from_events
+				.after(process_spell_enemy_collisions));
     }
 }
 
@@ -266,12 +271,12 @@ impl SpellElement {
 }
 
 /// Resolve spell-enemy collisions
-// TODO update w/ on-collide
 fn process_spell_enemy_collisions(
 	spell_query: Query<&SpellData, With<SpellMarker>>,
 	mut enemy_query: Query<&mut enemy::EnemyHealth>,
 	collisions: Res<physics::ActiveCollisions<physics::DamagesEnemies>>,
 	mut spell_despawn_events: EventWriter<SpellDespawnEvent>,
+	mut _create_spell_events: EventWriter<CreateSpellEvent>,
 ) {
 	for collision in collisions.iter() {
 		if let (Ok(spell_data), Ok(mut enemy_health)) = (spell_query.get(collision.source_entity), enemy_query.get_mut(collision.recip_entity)) {
@@ -282,18 +287,27 @@ fn process_spell_enemy_collisions(
 			}
 			println!("{:?}", enemy_health);
 			
+			if let Some(new_spell_data) = &spell_data.on_collide {
+				unimplemented!()
+			}
+			
 			spell_despawn_events.send(SpellDespawnEvent(collision.source_entity));
 		}
 	}
 }
 
-// TODO update to do the on-end part
 fn despawn_spells(
 	mut commands: Commands,
 	mut despawn_events: EventReader<SpellDespawnEvent>,
+	spell_query: Query<&SpellData>,
+	mut _create_spell_events: EventWriter<CreateSpellEvent>,
 ) {
 	for event in despawn_events.iter() {
-		// TODO do stuff for spawning sub-projectiles, particles, &c
+		if let Ok(spell_data) = spell_query.get(event.0) {
+			if let Some(new_spell_data) = &spell_data.on_end {
+				unimplemented!()
+			}
+		}
 		
 		commands.entity(event.0).despawn_recursive();
 	}
@@ -302,7 +316,8 @@ fn despawn_spells(
 fn create_spells_from_events(
     mut commands: Commands,
     all_spell_sprites: Res<AllSpellSprites>,
-	mut create_events: EventReader<CreateSpellEvent>
+	mut create_events: EventReader<CreateSpellEvent>,
+	shadow_texture: Res<sprite::ShadowTexture>,
 ) {
 	for event in create_events.iter() {
 		let texture_data = all_spell_sprites
@@ -344,6 +359,8 @@ fn create_spells_from_events(
 						texture_atlas: texture_data.texture_atlas.clone(),
 						..default()
 					});
+				// TODO determine index from sprite size
+				parent.spawn_bundle(shadow_texture.get_shadow_bundle(1));
 			});
 	}
 }

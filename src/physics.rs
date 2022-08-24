@@ -283,7 +283,7 @@ impl<T: Send + Sync + 'static> Plugin for CollisionPlugin<T> {
     }
 }
 
-fn resolve_collisions<T: Send + Sync + 'static> (
+pub fn resolve_collisions<T: Send + Sync + 'static> (
 	source_query: Query<(Entity, &CollisionSource<T>, Option<&GlobalTransform>, Option<&ColliderActive<T>>)>,
 	recip_query: Query<(Entity, &CollisionRecipient<T>, Option<&GlobalTransform>, Option<&ColliderActive<T>>)>,
 	mut collisions: ResMut<ActiveCollisions<T>>

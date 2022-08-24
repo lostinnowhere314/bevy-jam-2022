@@ -11,13 +11,59 @@ pub struct SpriteOffset(pub Vec3);
 pub struct FacingSpritePlugin;
 impl Plugin for FacingSpritePlugin {
     fn build(&self, app: &mut App) {
-        app.add_system_to_stage(
-            CoreStage::PostUpdate,
-            facing_sprite_update.before(transform_propagate_system),
-        )
-        .add_system(simple_animation_update)
-        .add_system_to_stage(CoreStage::PreUpdate, pause_animation_timers);
+        app
+			.add_startup_system_to_stage(StartupStage::PreStartup, shadow_setup)
+			.add_system_to_stage(
+				CoreStage::PostUpdate,
+				facing_sprite_update.before(transform_propagate_system),
+			)
+			.add_system(simple_animation_update)
+			.add_system_to_stage(CoreStage::PreUpdate, pause_animation_timers);
     }
+}
+
+
+// Shadows
+pub struct ShadowTexture(Handle<TextureAtlas>);
+#[derive(Bundle)]
+pub struct ShadowTextureBundle {
+	marker: FacingSpriteMarker,
+	sprite_offset: SpriteOffset,
+	#[bundle]
+	sprite_bundle: SpriteSheetBundle,
+}
+
+impl ShadowTexture {
+	pub fn get_shadow_bundle(&self, index: usize) -> ShadowTextureBundle {
+		ShadowTextureBundle {
+			marker: FacingSpriteMarker,
+			sprite_offset: SpriteOffset(Vec3::new(0.0, 0.0, -16.0)),
+			sprite_bundle: SpriteSheetBundle {
+				texture_atlas: self.0.clone(),
+				sprite: TextureAtlasSprite {
+					index,
+					..default()
+				},
+				..default()
+			}
+		}
+	}
+}
+
+fn shadow_setup(
+	mut commands: Commands,
+	asset_server: Res<AssetServer>,
+    mut texture_atlases: ResMut<Assets<TextureAtlas>>,
+) {
+	let texture_handle = asset_server.load("shadows.png");
+    let texture_atlas = texture_atlases.add(TextureAtlas::from_grid(
+        texture_handle,
+        Vec2::new(32.0, 16.0),
+        3,
+        2,
+    ));
+	
+	commands.insert_resource(ShadowTexture(texture_atlas));
 }
 
 // Make sprites look nice in our sort-of-3d environment

@@ -23,6 +23,7 @@ fn player_setup(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut texture_atlases: ResMut<Assets<TextureAtlas>>,
+	shadow_texture: Res<sprite::ShadowTexture>,
 ) {
     // Player sprite info
     let texture_handle = asset_server.load("player/player.png");
@@ -68,11 +69,12 @@ fn player_setup(
                     state: AnimationState::IdleRight,
                     index: 0,
                 })
-                .insert(sprite::SpriteOffset(Vec3::new(0.0, 24.0, 0.0)))
+                .insert(sprite::SpriteOffset(Vec3::new(0.0, 22.0, 0.0)))
                 .insert_bundle(SpriteSheetBundle {
                     texture_atlas,
                     ..default()
                 });
+			parent.spawn_bundle(shadow_texture.get_shadow_bundle(2));
         });
 }
 
@@ -181,7 +183,6 @@ fn get_animation_state(
     }
 }
 
-// TODO make this one have a vec of the next states to look at?
 #[derive(Component, Debug)]
 pub struct AnimationNextState {
     state: AnimationGeneralState,

@@ -73,6 +73,7 @@ fn enemy_test_system(
 	mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut texture_atlases: ResMut<Assets<TextureAtlas>>,
+	shadow_texture: Res<sprite::ShadowTexture>,
 ) {
 	let texture_handle = asset_server.load("no-sprite.png");
     let texture_atlas = texture_atlases.add(TextureAtlas::from_grid(
@@ -88,7 +89,7 @@ fn enemy_test_system(
 			100, 
 			physics::Collider::Circle {
 				center: Vec2::ZERO,
-				radius: 16.0
+				radius: 8.0
 			}, 
 			SpatialBundle {
 				transform: Transform::from_translation(Vec3::new(60.0, 0.0, 0.0)),
@@ -100,7 +101,8 @@ fn enemy_test_system(
                     texture_atlas,
                     ..default()
                 })
-				.insert(sprite::SpriteOffset(Vec3::new(0.0, 20.0, 0.0)))
+				.insert(sprite::SpriteOffset(Vec3::new(0.0, 5.0, 0.0)))
 				.insert(sprite::FacingSpriteMarker);
+			parent.spawn_bundle(shadow_texture.get_shadow_bundle(2));
 		});
 }
