@@ -33,6 +33,11 @@ fn player_setup(
         8,
     ));
 
+	let collider = physics::Collider::Circle {
+		center: Vec2::ZERO,
+		radius: 8.0
+	};
+	
     // Spawn the player
     commands
         .spawn()
@@ -44,8 +49,12 @@ fn player_setup(
         })
         .insert_bundle(SpatialBundle::default())
         .insert(spells::RuneCastQueue::new())
+		.insert(physics::CollisionRecipient::<physics::WallCollidable>::new(collider.clone()))
+		.insert(physics::CollisionRecipient::<physics::DamagesPlayer>::new(collider.clone()))
+		.insert(physics::ColliderActive::<physics::DamagesPlayer>::new(true))
+		.insert(physics::SymmetricCollisionSource::<physics::TakesSpace>::new(collider.clone()))
         .with_children(|parent| {
-            // Create something to manage the sprite properly
+            // Manage the sprite properly
             parent
                 .spawn()
                 .insert(PlayerSpriteMarker)

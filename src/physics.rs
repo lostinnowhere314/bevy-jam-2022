@@ -8,9 +8,25 @@ pub struct GeneralPhysicsPlugin;
 
 impl Plugin for GeneralPhysicsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(update_movement);
+        app
+			.add_system(update_movement)
+			.add_plugin(CollisionPlugin::<WallCollidable>::default())
+			.add_plugin(CollisionPlugin::<DamagesPlayer>::default())
+			.add_plugin(CollisionPlugin::<DamagesEnemies>::default())
+			.add_plugin(SymmetricCollisionPlugin::<TakesSpace>::default());
     }
 }
+
+// Specific collision categories
+#[derive(Default)]
+pub struct WallCollidable;
+#[derive(Default)]
+pub struct DamagesPlayer;
+#[derive(Default)]
+pub struct DamagesEnemies;
+// symmetric for player and enemies; prevents occupying same space
+#[derive(Default)]
+pub struct TakesSpace;
 
 #[derive(Component, Deref, DerefMut, Debug)]
 pub struct Speed(pub Vec3);
@@ -195,6 +211,27 @@ impl<T> HasCollider for SymmetricCollisionSource<T> {
 	}
 }
 
+// constructors
+impl<T> CollisionSource<T> {
+	pub fn new(collider: Collider) -> Self {
+		Self(collider, Default::default())
+	}
+}
+impl<T> CollisionRecipient<T> {
+	pub fn new(collider: Collider) -> Self {
+		Self(collider, Default::default())
+	}
+}
+impl<T> SymmetricCollisionSource<T> {
+	pub fn new(collider: Collider) -> Self {
+		Self(collider, Default::default())
+	}
+}
+impl<T> ColliderActive<T> {
+	pub fn new(active: bool) -> Self {
+		Self(active, Default::default())
+	}
+}
 
 /// Stores collision data
 /// Used for both directed and symmetric collision cases
@@ -236,6 +273,7 @@ impl<T> DerefMut for ActiveCollisions<T> {
 
 
 // Plugins
+#[derive(Default)]
 pub struct CollisionPlugin<T>(PhantomData<T>);
 impl<T: Send + Sync + 'static> Plugin for CollisionPlugin<T> {
     fn build(&self, app: &mut App) {
@@ -271,6 +309,7 @@ fn resolve_collisions<T: Send + Sync + 'static> (
 }
 
 
+#[derive(Default)]
 pub struct SymmetricCollisionPlugin<T>(PhantomData<T>);
 impl<T: Send + Sync + 'static> Plugin for SymmetricCollisionPlugin<T> {
     fn build(&self, app: &mut App) {
