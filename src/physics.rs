@@ -1,5 +1,8 @@
 use super::ui;
 use bevy::prelude::*;
+use std::marker::{Send, Sync, PhantomData};
+use std::ops::{Deref, DerefMut};
+use itertools::Itertools;
 
 pub struct GeneralPhysicsPlugin;
 
@@ -25,4 +28,178 @@ pub fn update_movement(
         // Update position
         transform.translation += speed.0 * time.delta_seconds();
     }
+}
+
+// Collision stuff
+#[derive(Debug, Clone)]
+pub enum Collider {
+	Circle {
+		center: Vec2,
+		radius: f32,
+	},
+	LineSegment {
+		// todo
+	}
+}
+
+impl Collider {
+	fn with_transform(&self, transform: &Transform) -> Self {
+		unimplemented!()
+	}
+	
+	fn intersects(&self, other: &Collider) -> bool {
+		unimplemented!()
+	}
+}
+
+// Generics time
+#[derive(Component, Debug)]
+pub struct CollisionSource<T>(pub Collider, PhantomData<T>);
+#[derive(Component, Debug)]
+pub struct CollisionRecipient<T>(pub Collider, PhantomData<T>);
+#[derive(Component, Debug)]
+pub struct SymmetricCollisionSource<T>(pub Collider, PhantomData<T>);
+#[derive(Component)]
+pub struct ColliderActive<T>(pub bool, PhantomData<T>);
+
+// trait to compactify some things
+trait HasCollider {
+	fn collider(&self) -> &Collider;
+}
+impl<T> HasCollider for CollisionSource<T> {
+	fn collider(&self) -> &Collider {
+		&self.0
+	}
+}
+impl<T> HasCollider for CollisionRecipient<T> {
+	fn collider(&self) -> &Collider {
+		&self.0
+	}
+}
+impl<T> HasCollider for SymmetricCollisionSource<T> {
+	fn collider(&self) -> &Collider {
+		&self.0
+	}
+}
+
+
+/// Stores collision data
+/// Used for both directed and symmetric collision cases
+/// For symmetric, ordering is arbitrary
+#[derive(Debug)]
+pub struct Collision {
+	pub source_entity: Entity,
+	pub source_collider: Collider,
+	pub recip_entity: Entity,
+	pub recip_collider: Collider,
+}
+
+/// Resource for holding collisions.
+/// Updated each frame in CoreStage::PreUpdate
+#[derive(Debug)]
+pub struct ActiveCollisions<T>(pub Vec<Collision>, PhantomData<T>);
+
+impl<T> ActiveCollisions<T> {
+	fn new() -> ActiveCollisions<T> {
+		ActiveCollisions::<T>(
+			Vec::<Collision>::new(), 
+			Default::default()
+		)
+	}
+}
+
+impl<T> Deref for ActiveCollisions<T> {
+	type Target = Vec<Collision>;
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+impl<T> DerefMut for ActiveCollisions<T> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.0
+	}
+}
+
+
+// Plugins
+pub struct CollisionPlugin<T>(PhantomData<T>);
+impl<T: Send + Sync + 'static> Plugin for CollisionPlugin<T> {
+    fn build(&self, app: &mut App) {
+        app
+			.insert_resource(ActiveCollisions::<T>::new())
+			.add_system_to_stage(CoreStage::PreUpdate, resolve_collisions::<T>);
+    }
+}
+
+fn resolve_collisions<T: Send + Sync + 'static> (
+	source_query: Query<(Entity, &CollisionSource<T>, Option<&GlobalTransform>, Option<&ColliderActive<T>>)>,
+	recip_query: Query<(Entity, &CollisionRecipient<T>, Option<&GlobalTransform>, Option<&ColliderActive<T>>)>,
+	mut collisions: ResMut<ActiveCollisions<T>>
+) {
+	collisions.clear();
+	
+	let source_iter = process_collision_query(source_query);
+	let recip_iter = process_collision_query(recip_query);
+	
+	
+	for (source_entity, source_collider) in source_iter {
+		for (recip_entity, recip_collider) in &recip_iter {
+			if source_collider.intersects(&recip_collider) {
+				collisions.push(Collision {
+					source_entity,
+					source_collider: source_collider.clone(),
+					recip_entity: *recip_entity,
+					recip_collider: recip_collider.clone()
+				});
+			}
+		}
+	}
+}
+
+
+pub struct SymmetricCollisionPlugin<T>(PhantomData<T>);
+impl<T: Send + Sync + 'static> Plugin for SymmetricCollisionPlugin<T> {
+    fn build(&self, app: &mut App) {
+        app
+			.insert_resource(ActiveCollisions::<T>::new())
+			.add_system_to_stage(CoreStage::PreUpdate, resolve_collisions_symmetric::<T>);
+    }
+}
+
+fn resolve_collisions_symmetric<T: Send + Sync + 'static> (
+	sources_query: Query<(Entity, &SymmetricCollisionSource<T>, Option<&GlobalTransform>, Option<&ColliderActive<T>>)>,
+	mut collisions: ResMut<ActiveCollisions<T>>
+) {
+	collisions.clear();
+	
+	let sources_iter = process_collision_query(sources_query);
+	
+	for pair in sources_iter.iter().combinations(2) {
+		//check for collisions
+	}
+}
+
+
+// Utility function for processing collision queries
+fn process_collision_query<T: Send+Sync+'static, U: HasCollider+Component>(
+	query: Query<(Entity, &U, Option<&GlobalTransform>, Option<&ColliderActive<T>>)>
+) -> Vec<(Entity, Collider)> {
+	query
+		.iter()
+		.filter(|(_,_,_,s)| match s {
+			Some(active) => active.0,
+			None => true
+		})
+		.map(|(e, collider_container, maybe_transform, _)| {
+			let collider_orig = collider_container.collider();
+			
+			let collider = match maybe_transform {
+				Some(transform) => collider_orig.with_transform(&transform.compute_transform()),
+				None => collider_orig.clone()
+			};
+			
+			(e, collider)
+		})
+		.collect()
 }
