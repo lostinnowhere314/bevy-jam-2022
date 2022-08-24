@@ -8,6 +8,7 @@
 use bevy::{
     prelude::*,
     render::{camera::ScalingMode, texture::ImageSettings},
+	//diagnostic::{LogDiagnosticsPlugin, FrameTimeDiagnosticsPlugin},
 };
 
 mod physics;
@@ -33,6 +34,8 @@ fn main() {
         .add_plugin(physics::GeneralPhysicsPlugin)
         .add_plugin(ui::UIPlugin)
         .add_startup_system(setup)
+        //.add_plugin(LogDiagnosticsPlugin::default())
+        //.add_plugin(FrameTimeDiagnosticsPlugin::default())
         .run();
 }
 
