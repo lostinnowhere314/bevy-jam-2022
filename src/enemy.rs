@@ -1,6 +1,9 @@
 
-use bevy::prelude::*;
-use super::{player, physics, sprite};
+use bevy::{
+	prelude::*,
+	utils::Duration
+};
+use super::{player, physics, sprite, ui, collapse_vec3};
 
 
 pub struct EnemyPlugin;
@@ -8,15 +11,29 @@ pub struct EnemyPlugin;
 impl Plugin for EnemyPlugin {
 	fn build(&self, app: &mut App) {
 		app
-			.add_system(do_enemy_ai)
+			.add_system(enemy_ai_general_update)
+			.add_system(do_enemy_ai::<AIPeriodicCharge>)
+			.add_system(clean_dead_enemies)
 			// TEST SYSTEM
 			.add_startup_system(enemy_test_system);
 	}	
 }
 
+pub trait EnemyAIState: Component+Default {
+	fn update(
+		&mut self,
+		general_state: &AIGeneralState, 
+		speed: &mut physics::Speed, 
+		own_pos: &mut Transform,
+		player_pos: Vec2,
+		time_delta: Duration,
+	);
+}
+
 #[derive(Bundle)]
-pub struct EnemyBundle {
-	ai_state: AIState,
+pub struct EnemyBundle<T: EnemyAIState> {
+	ai_state: T,
+	ai_data: AIGeneralState,
 	health: EnemyHealth,
 	speed: physics::Speed,
 	own_damage_collider: physics::CollisionRecipient<physics::DamagesEnemies>,
@@ -27,10 +44,14 @@ pub struct EnemyBundle {
 	spatial: SpatialBundle,
 }
 
-impl EnemyBundle {
-	pub fn new(ai_type: AIType, max_health: i32, collider: physics::Collider, spatial: SpatialBundle) -> Self {
+impl<T: EnemyAIState> EnemyBundle<T> {
+	pub fn new(max_health: i32, collider: physics::Collider, spatial: SpatialBundle) -> Self {
 		EnemyBundle {
-			ai_state: ai_type.to_default_ai_state(),
+			ai_state: T::default(),
+			ai_data: AIGeneralState {
+				has_noticed_player: false,
+				view_radius: 200.0,
+			},
 			health: EnemyHealth(max_health),
 			speed: physics::Speed(Vec2::ZERO),
 			own_damage_collider: physics::CollisionRecipient::<physics::DamagesEnemies>::new(collider.clone()),
@@ -42,33 +63,128 @@ impl EnemyBundle {
 	}
 }
 
-pub enum AIType {
-	PeriodicCharge
-}
-
-impl AIType {
-	fn to_default_ai_state(&self) -> AIState {
-		match self {
-			Self::PeriodicCharge => AIState::PeriodicCharge(Vec2::ZERO)
-		}
-	}
-}
-
+// State information common to all AI types
 #[derive(Component, Debug)]
-enum AIState {
-	PeriodicCharge(Vec2)
+pub struct AIGeneralState {
+	has_noticed_player: bool,
+	view_radius: f32,
 }
 
 #[derive(Component, Debug)]
 pub struct EnemyHealth(pub i32);
 
-fn do_enemy_ai(
-	query: Query<(&mut AIState, &mut physics::Speed, &Transform)>,
+// General systems ////////
+fn enemy_ai_general_update(
+	mut query: Query<(&mut AIGeneralState, &Transform), Without<player::Player>>,
 	player_query: Query<&Transform, With<player::Player>>,
+    spell_ui_active: Res<ui::SpellUiActive>,
 ) {
-	// TODO
+	if spell_ui_active.0 {
+		return;
+	}
+	let player_pos = player_query.single().translation;
+	
+	for (mut state, transform) in query.iter_mut() {
+		let pos = transform.translation;
+		if !state.has_noticed_player && pos.distance(player_pos) < state.view_radius {
+			state.has_noticed_player = true;
+		}
+	}
 }
 
+fn do_enemy_ai<T: EnemyAIState>(
+	mut query: Query<(&mut T, &AIGeneralState, &mut physics::Speed, &mut Transform), Without<player::Player>>,
+	player_query: Query<&Transform, With<player::Player>>,
+	time: Res<Time>,
+    spell_ui_active: Res<ui::SpellUiActive>,
+) {
+	if spell_ui_active.0 {
+		return;
+	}
+	
+	let player_transform = player_query.single();
+	
+	for (mut state, general_data, mut speed, mut transform) in query.iter_mut() {
+		state.update(
+			general_data, 
+			&mut speed, 
+			&mut transform, 
+			collapse_vec3(player_transform.translation),
+			time.delta(),
+		);
+	}
+}
+
+fn clean_dead_enemies(
+	mut commands: Commands,
+	query: Query<(Entity, &EnemyHealth)>
+) {
+	for (e, health) in query.iter() {
+		if health.0 <= 0 {
+			commands.entity(e).despawn_recursive();
+		}
+	}
+}
+
+// AI types /////////////////
+
+#[derive(Component)]
+pub struct AIPeriodicCharge {
+	timer: Timer,
+	is_charging: bool,
+	speed: f32,
+	target_speed: Vec2,
+}
+
+impl EnemyAIState for AIPeriodicCharge {
+	fn update(
+		&mut self,
+		general_state: &AIGeneralState, 
+		speed: &mut physics::Speed, 
+		own_pos: &mut Transform,
+		player_pos: Vec2,
+		time_delta: Duration,
+	) {
+		if !general_state.has_noticed_player {
+			return;
+		}
+		
+		self.timer.tick(time_delta);
+		if self.timer.just_finished() {
+			let own_pos_2 = collapse_vec3(own_pos.translation);
+			
+			if self.is_charging {
+				let dir_to_player = (player_pos - own_pos_2).normalize_or_zero();
+				
+				self.target_speed = dir_to_player * self.speed;
+			} else {
+				self.target_speed = Vec2::ZERO; 
+			}
+			self.is_charging = !self.is_charging;
+		}
+		
+		let base = 0.1f32;
+		let ratio = base.powf(time_delta.as_secs_f32());
+		speed.0 = speed.0 * ratio + self.target_speed * (1.0 - ratio);
+	}
+}
+
+impl Default for AIPeriodicCharge {
+	fn default() -> Self {
+		AIPeriodicCharge {
+			timer: Timer::from_seconds(1.0, true),
+			is_charging: true,
+			speed: 90.0,
+			target_speed: Vec2::ZERO,
+		}
+	}
+}
+
+
+
+
+
+// TODO testing; remove eventually
 fn enemy_test_system(
 	mut commands: Commands,
     asset_server: Res<AssetServer>,
@@ -84,8 +200,7 @@ fn enemy_test_system(
     ));
 	
 	commands
-		.spawn_bundle(EnemyBundle::new(
-			AIType::PeriodicCharge, 
+		.spawn_bundle(EnemyBundle::<AIPeriodicCharge>::new(
 			100, 
 			physics::Collider::Circle {
 				center: Vec2::ZERO,
