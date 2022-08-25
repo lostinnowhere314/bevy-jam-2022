@@ -26,10 +26,17 @@ fn player_setup(
 	shadow_texture: Res<sprite::ShadowTexture>,
 ) {
     // Player sprite info
-    let texture_handle = asset_server.load("player/player.png");
-    let texture_atlas = texture_atlases.add(TextureAtlas::from_grid(
-        texture_handle,
+    let player_texture = asset_server.load("player/player.png");
+    let player_texture_atlas = texture_atlases.add(TextureAtlas::from_grid(
+        player_texture,
         Vec2::new(32.0, 64.0),
+        8,
+        8,
+    ));
+    let player_staff_texture = asset_server.load("player/player-staff.png");
+    let player_staff_texture_atlas = texture_atlases.add(TextureAtlas::from_grid(
+        player_staff_texture,
+        Vec2::new(48.0, 64.0),
         8,
         8,
     ));
@@ -71,7 +78,7 @@ fn player_setup(
                 })
                 .insert(sprite::SpriteOffset(Vec3::new(0.0, 22.0, 0.0)))
                 .insert_bundle(SpriteSheetBundle {
-                    texture_atlas,
+                    texture_atlas: player_staff_texture_atlas,
                     ..default()
                 });
 			parent.spawn_bundle(shadow_texture.get_shadow_bundle(2));
