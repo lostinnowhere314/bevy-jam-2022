@@ -10,6 +10,7 @@ use bevy::{
     render::{camera::ScalingMode, texture::ImageSettings},
 	//diagnostic::{LogDiagnosticsPlugin, FrameTimeDiagnosticsPlugin},
 };
+use bevy_turborand::*;
 
 mod physics;
 mod player;
@@ -29,6 +30,7 @@ fn main() {
         .insert_resource(ImageSettings::default_nearest())
         .insert_resource(Msaa { samples: 1 })
         .add_plugins(DefaultPlugins)
+        .add_plugin(RngPlugin::default())
         .add_plugin(player::PlayerPlugin)
         .add_plugin(sprite::FacingSpritePlugin)
         .add_plugin(spells::SpellPlugin)

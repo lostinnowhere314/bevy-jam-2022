@@ -3,8 +3,9 @@ use bevy::{
 	prelude::*,
 	utils::Duration
 };
-use super::{player, physics, sprite, ui, collapse_vec3};
-
+use bevy_turborand::*;
+use std::f32::consts::PI;
+use super::{player, physics, sprite, ui, collapse_vec3, expand_vec2};
 
 pub struct EnemyPlugin;
 
@@ -27,6 +28,7 @@ pub trait EnemyAIState: Component+Default {
 		own_pos: &mut Transform,
 		player_pos: Vec2,
 		time_delta: Duration,
+		rng: &mut RngComponent,
 	);
 }
 
@@ -42,10 +44,16 @@ pub struct EnemyBundle<T: EnemyAIState> {
 	wall_collider: physics::CollisionRecipient<physics::WallCollidable>,
 	#[bundle]
 	spatial: SpatialBundle,
+	rng: RngComponent,
 }
 
 impl<T: EnemyAIState> EnemyBundle<T> {
-	pub fn new(max_health: i32, collider: physics::Collider, spatial: SpatialBundle) -> Self {
+	pub fn new(
+		max_health: i32, 
+		collider: physics::Collider, 
+		spatial: SpatialBundle, 
+		global_rng: &mut GlobalRng,
+	) -> Self {
 		EnemyBundle {
 			ai_state: T::default(),
 			ai_data: AIGeneralState {
@@ -59,6 +67,7 @@ impl<T: EnemyAIState> EnemyBundle<T> {
 			player_space_collider: physics::SymmetricCollisionSource::<physics::TakesSpace>::new(collider.clone()),
 			wall_collider: physics::CollisionRecipient::<physics::WallCollidable>::new(collider),
 			spatial,
+			rng: RngComponent::with_seed(global_rng.u64(0..=u64::MAX)),
 		}
 	}
 }
@@ -93,7 +102,7 @@ fn enemy_ai_general_update(
 }
 
 fn do_enemy_ai<T: EnemyAIState>(
-	mut query: Query<(&mut T, &AIGeneralState, &mut physics::Speed, &mut Transform), Without<player::Player>>,
+	mut query: Query<(&mut T, &AIGeneralState, &mut physics::Speed, &mut Transform, &mut RngComponent), Without<player::Player>>,
 	player_query: Query<&Transform, With<player::Player>>,
 	time: Res<Time>,
     spell_ui_active: Res<ui::SpellUiActive>,
@@ -104,13 +113,14 @@ fn do_enemy_ai<T: EnemyAIState>(
 	
 	let player_transform = player_query.single();
 	
-	for (mut state, general_data, mut speed, mut transform) in query.iter_mut() {
+	for (mut state, general_data, mut speed, mut transform, mut rng) in query.iter_mut() {
 		state.update(
 			general_data, 
 			&mut speed, 
 			&mut transform, 
 			collapse_vec3(player_transform.translation),
 			time.delta(),
+			&mut rng,
 		);
 	}
 }
@@ -133,6 +143,7 @@ pub struct AIPeriodicCharge {
 	timer: Timer,
 	is_charging: bool,
 	speed: f32,
+	max_dev_angle: f32,
 	target_speed: Vec2,
 }
 
@@ -144,6 +155,7 @@ impl EnemyAIState for AIPeriodicCharge {
 		own_pos: &mut Transform,
 		player_pos: Vec2,
 		time_delta: Duration,
+		rng: &mut RngComponent,
 	) {
 		if !general_state.has_noticed_player {
 			return;
@@ -154,16 +166,20 @@ impl EnemyAIState for AIPeriodicCharge {
 			let own_pos_2 = collapse_vec3(own_pos.translation);
 			
 			if self.is_charging {
-				let dir_to_player = (player_pos - own_pos_2).normalize_or_zero();
+				let dir_to_player = player_pos - own_pos_2;
+				let angle = rng.f32_normalized() * self.max_dev_angle;
+				let target_dir = collapse_vec3(
+					Quat::from_rotation_y(angle) * expand_vec2(dir_to_player)
+				).normalize_or_zero();
 				
-				self.target_speed = dir_to_player * self.speed;
+				self.target_speed = target_dir * self.speed;
 			} else {
 				self.target_speed = Vec2::ZERO; 
 			}
 			self.is_charging = !self.is_charging;
 		}
 		
-		let base = 0.1f32;
+		let base = 0.2f32;
 		let ratio = base.powf(time_delta.as_secs_f32());
 		speed.0 = speed.0 * ratio + self.target_speed * (1.0 - ratio);
 	}
@@ -174,7 +190,8 @@ impl Default for AIPeriodicCharge {
 		AIPeriodicCharge {
 			timer: Timer::from_seconds(1.0, true),
 			is_charging: true,
-			speed: 90.0,
+			speed: 160.0,
+			max_dev_angle: PI / 8.0,
 			target_speed: Vec2::ZERO,
 		}
 	}
@@ -190,6 +207,7 @@ fn enemy_test_system(
     asset_server: Res<AssetServer>,
     mut texture_atlases: ResMut<Assets<TextureAtlas>>,
 	shadow_texture: Res<sprite::ShadowTexture>,
+	mut global_rng: ResMut<GlobalRng>,
 ) {
 	let texture_handle = asset_server.load("no-sprite.png");
     let texture_atlas = texture_atlases.add(TextureAtlas::from_grid(
@@ -209,7 +227,8 @@ fn enemy_test_system(
 			SpatialBundle {
 				transform: Transform::from_translation(Vec3::new(60.0, 0.0, 0.0)),
 				..default()
-			}
+			},
+			&mut global_rng
 		)).with_children(|parent| {
 			parent
 				.spawn_bundle(SpriteSheetBundle {
