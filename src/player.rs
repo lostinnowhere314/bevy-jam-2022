@@ -8,16 +8,28 @@ impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugin(InputManagerPlugin::<Action>::default())
             .add_startup_system(player_setup)
+			.add_system(update_player_state.after(update_spell_casting).before(player_movement))
             .add_system(player_movement.before(physics::update_movement))
             .add_system(update_spell_casting)
-            .add_system(update_player_animation.after(player_movement));
+            .add_system(update_player_animation.after(player_movement).after(update_player_state));
     }
 }
 
 #[derive(Component, Debug)]
 pub struct Player;
 #[derive(Component, Debug)]
+pub struct CurrentPlayerState(PlayerState);
+#[derive(Debug, PartialEq, Eq)]
+pub enum PlayerState {
+	Normal,
+	Casting,
+	Knockback,
+}
+#[derive(Component, Debug)]
 pub struct PlayerSpriteMarker;
+#[derive(Component, Debug)]
+pub struct PlayerVulnerability; // TODO keep values and a timer to determine vulnerability
+// also TODO add health and mana
 
 fn player_setup(
     mut commands: Commands,
@@ -50,6 +62,8 @@ fn player_setup(
     commands
         .spawn()
         .insert(Player)
+		.insert(CurrentPlayerState(PlayerState::Normal))
+		.insert(PlayerVulnerability)
         .insert(physics::Speed(Vec2::ZERO))
         .insert_bundle(InputManagerBundle::<Action> {
             action_state: ActionState::default(),
@@ -68,12 +82,9 @@ fn player_setup(
                 .insert(PlayerSpriteMarker)
                 .insert(sprite::FacingSpriteMarker)
                 .insert(sprite::AnimationTimer(Timer::from_seconds(1.0 / 7.0, true)))
-                .insert(AnimationNextState {
-                    state: AnimationGeneralState::Idle,
+                .insert(PlayerAnimationState {
+                    anim_state: AnimationState::Idle,
                     facing_dir: FacingDir::Right,
-                })
-                .insert(AnimationCurrentState {
-                    state: AnimationState::IdleRight,
                     index: 0,
                 })
                 .insert(sprite::SpriteOffset(Vec3::new(0.0, 22.0, 0.0)))
@@ -85,186 +96,170 @@ fn player_setup(
         });
 }
 
+fn update_player_state(
+    mut query: Query<(&mut CurrentPlayerState, &mut PlayerVulnerability, &spells::RuneCastQueue), With<Player>>,
+) {
+	let (mut player_state, player_vulnerable, spell_queue) = query.single_mut();
+	
+	player_state.0 = match player_state.0 {
+		PlayerState::Normal | PlayerState::Casting => {
+			if spell_queue.is_empty() {
+				PlayerState::Normal
+			} else {
+				PlayerState::Casting
+			}
+		}
+		PlayerState::Knockback => {
+			//TODO use a timer
+			PlayerState::Normal
+		}
+	};
+}
+
 // Animation stuffs
-// NOTE: to generalize: turn this into a trait?
-#[derive(Debug, Clone, Copy, Hash, PartialEq)]
-pub enum AnimationState {
-    IdleRight,
-    IdleLeft,
-    WalkRight,
-    WalkLeft,
-}
-impl AnimationState {
-    /// Returns the start offset of the animation
-    fn offset(&self) -> usize {
-        match self {
-            AnimationState::IdleRight => 0,
-            AnimationState::IdleLeft => 2,
-            AnimationState::WalkRight => 8,
-            AnimationState::WalkLeft => 16,
-        }
-    }
-
-    fn length(&self) -> usize {
-        match self {
-            AnimationState::IdleRight => 1,
-            AnimationState::IdleLeft => 1,
-            AnimationState::WalkRight => 8,
-            AnimationState::WalkLeft => 8,
-        }
-    }
-
-    fn is_interruptible(&self) -> bool {
-        match self {
-            AnimationState::IdleRight => true,
-            AnimationState::IdleLeft => true,
-            AnimationState::WalkRight => true,
-            AnimationState::WalkLeft => true,
-        }
-    }
-
-    fn get_priority(&self) -> i32 {
-        self.get_general_state().get_priority()
-    }
-
-    fn order_is_reversed(&self) -> bool {
-        match self {
-            AnimationState::IdleRight => false,
-            AnimationState::IdleLeft => false,
-            AnimationState::WalkRight => false,
-            AnimationState::WalkLeft => true,
-        }
-    }
-
-    fn get_general_state(&self) -> AnimationGeneralState {
-        match self {
-            AnimationState::IdleRight => AnimationGeneralState::Idle,
-            AnimationState::IdleLeft => AnimationGeneralState::Idle,
-            AnimationState::WalkRight => AnimationGeneralState::Walk,
-            AnimationState::WalkLeft => AnimationGeneralState::Walk,
-        }
-    }
-}
-
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum FacingDir {
     Left,
     Right,
 }
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum AnimationGeneralState {
+pub enum AnimationState {
     Idle,
     Walk,
-    //Casting,
+    Casting,
+	Knockback,
+}
+struct AnimationDescription {
+	start_index: usize,
+	length: usize,
+	reversed: bool,
+	priority: i32, // knockback > casting > walk = idle
+}
+// and a function that turns one into the other
+fn get_animation_description(facing_dir: FacingDir, anim_state: AnimationState) -> AnimationDescription {
+	let priority = match anim_state {
+		AnimationState::Idle | AnimationState::Walk => 0,
+		AnimationState::Casting => 5,
+		AnimationState::Knockback => 10,
+	};
+	
+	let reversed = match facing_dir {
+		FacingDir::Left => true,
+		FacingDir::Right => false,
+	};
+	
+	let length = match anim_state {
+		AnimationState::Idle | AnimationState::Knockback => 1,
+		AnimationState::Walk => 8,
+		AnimationState::Casting => 3,
+	};
+	
+	let start_index = match (facing_dir, anim_state) {
+		(FacingDir::Left, AnimationState::Idle) => 2,
+		(FacingDir::Left, AnimationState::Walk) => 16,
+		(FacingDir::Left, AnimationState::Casting) => 29,
+		(FacingDir::Left, AnimationState::Knockback) => 0,
+		(FacingDir::Right, AnimationState::Idle) => 0,
+		(FacingDir::Right, AnimationState::Walk) => 8,
+		(FacingDir::Right, AnimationState::Casting) => 24,
+		(FacingDir::Right, AnimationState::Knockback) => 2,
+	};
+	
+	AnimationDescription {
+		start_index,
+		length,
+		reversed,
+		priority,
+	}
 }
 
-impl AnimationGeneralState {
-    fn get_default_next_state(&self) -> AnimationGeneralState {
-        match self {
-            AnimationGeneralState::Idle => AnimationGeneralState::Idle,
-            AnimationGeneralState::Walk => AnimationGeneralState::Walk,
-        }
-    }
-
-    fn get_priority(&self) -> i32 {
-        match self {
-            AnimationGeneralState::Idle => 0,
-            AnimationGeneralState::Walk => 0,
-        }
-    }
+#[derive(Component)]
+pub struct PlayerAnimationState {
+	facing_dir: FacingDir,
+	anim_state: AnimationState,
+	index: usize,
 }
 
-fn get_animation_state(
-    facing_dir: FacingDir,
-    animation_gen_state: AnimationGeneralState,
-) -> AnimationState {
-    match animation_gen_state {
-        AnimationGeneralState::Idle => match facing_dir {
-            FacingDir::Left => AnimationState::IdleLeft,
-            FacingDir::Right => AnimationState::IdleRight,
-        },
-        AnimationGeneralState::Walk => match facing_dir {
-            FacingDir::Left => AnimationState::WalkLeft,
-            FacingDir::Right => AnimationState::WalkRight,
-        },
-    }
-}
-
-#[derive(Component, Debug)]
-pub struct AnimationNextState {
-    state: AnimationGeneralState,
-    facing_dir: FacingDir,
-}
-#[derive(Component, Debug)]
-struct AnimationCurrentState {
-    state: AnimationState,
-    index: usize,
-}
-
-impl AnimationNextState {
-    pub fn set_state_if_priority(&mut self, new_state: AnimationGeneralState) {
-        if new_state.get_priority() >= self.state.get_priority() {
-            self.state = new_state;
-        }
-    }
-}
-
-// Handles updating player animations
-fn update_player_animation(
+fn update_player_animation (
     time: Res<Time>,
-    mut query: Query<
-        (
-            &mut sprite::AnimationTimer,
-            &mut AnimationCurrentState,
-            &mut AnimationNextState,
-            &mut TextureAtlasSprite,
-        ),
-        With<PlayerSpriteMarker>,
-    >,
+    mut anim_query: Query<
+		(&mut sprite::AnimationTimer, &mut TextureAtlasSprite, &mut PlayerAnimationState),
+        With<PlayerSpriteMarker>>,
+	player_query: Query<(&CurrentPlayerState, &physics::Speed), With<Player>>,
     spell_ui_active: Res<ui::SpellUiActive>,
 ) {
-    if !spell_ui_active.0 {
-        for (mut timer, mut current_state, mut next_state, mut sprite) in &mut query {
-            // update timer
-            timer.tick(time.delta());
-            // Determine if the next animation should interrupt the current one
-            let next_transition_state =
-                get_animation_state(next_state.facing_dir, next_state.state);
-            let interrupt = next_transition_state != current_state.state
-                && current_state.state.is_interruptible()
-                && next_transition_state.get_priority() >= current_state.state.get_priority();
-            let interrupt_immediate = interrupt
-                && next_transition_state.get_priority() > current_state.state.get_priority();
+	if spell_ui_active.0 {
+		return;
+	}
+	
+	let (player_state, player_speed) = player_query.single();
+	let (mut timer, mut sprite, mut current_anim_state) = anim_query.single_mut();
+	
+	timer.tick(time.delta());
+	
+	let anim_desc = get_animation_description(
+		current_anim_state.facing_dir,
+		current_anim_state.anim_state,
+	);
+	
+	// Sort of trying to deal with the next state
+	// What the facing direction should be
+	let next_facing_dir = if player_speed.0.x > 0.1 {
+		FacingDir::Right
+	} else if player_speed.0.x < -0.1 {
+		FacingDir::Left
+	} else {
+		current_anim_state.facing_dir
+	};
+	
+	// What the animation state should be
+	let next_anim_state = match player_state.0 {
+		PlayerState::Normal => if player_speed.0.length() > 10.0 {
+				AnimationState::Walk
+			} else {
+				AnimationState::Idle
+			}
+		PlayerState::Casting => AnimationState::Casting,
+		PlayerState::Knockback => AnimationState::Knockback,
+	};
+	
+	let next_anim_desc = get_animation_description(
+		next_facing_dir,
+		next_anim_state,
+	);
+	
+	// Determine if we need to change animation, and if we should without waiting for the next timer tick
+	let change_animation = current_anim_state.facing_dir != next_facing_dir 
+		|| current_anim_state.anim_state != next_anim_state;
+	let interrupt_immediate = change_animation && anim_desc.priority < next_anim_desc.priority;
+		
+	if change_animation {
+		if timer.just_finished() || interrupt_immediate {
+			if interrupt_immediate {
+				timer.reset();
+			}
+			current_anim_state.index = 0;
+			current_anim_state.facing_dir = next_facing_dir;
+			current_anim_state.anim_state = next_anim_state;
+			update_sprite(&mut sprite, current_anim_state.index, next_anim_desc);
+		}
+	} else {
+		// Increment the index if the timer is done
+		if timer.just_finished() {
+			current_anim_state.index = (current_anim_state.index + 1) % anim_desc.length;
+			update_sprite(&mut sprite, current_anim_state.index, anim_desc);
+		}
+	};
+}
 
-            if timer.just_finished() || interrupt_immediate {
-                if interrupt_immediate {
-                    timer.reset();
-                }
-
-                current_state.index += 1;
-
-                // Figure out if we need to transition
-                if current_state.index >= current_state.state.length() || interrupt {
-                    // Reset index
-                    current_state.index = 0;
-                    // Find the default state to transition to after this one
-                    let default_next_state = next_state.state.get_default_next_state();
-                    // Do the transition
-                    current_state.state = next_transition_state;
-
-                    next_state.state = default_next_state;
-                }
-
-                // Update sprite index
-                sprite.index = if current_state.state.order_is_reversed() {
-                    current_state.state.offset()
-                        + (current_state.state.length() - current_state.index - 1)
-                } else {
-                    current_state.state.offset() + current_state.index
-                };
-            }
-        }
-    }
+/// Updates the TextureAtlasSprite to have the proper texture index
+fn update_sprite(sprite: &mut TextureAtlasSprite, index: usize, anim_desc: AnimationDescription) {
+	sprite.index = if anim_desc.reversed {
+		anim_desc.start_index
+			+ (anim_desc.length - index - 1)
+	} else {
+		anim_desc.start_index + index
+	};
 }
 
 // Movement
@@ -273,8 +268,7 @@ struct PlayerSpeed(Vec3);
 
 fn player_movement(
     action_state: Query<&ActionState<Action>, With<Player>>,
-    mut player_query: Query<&mut physics::Speed, With<Player>>,
-    mut anim_query: Query<&mut AnimationNextState, With<PlayerSpriteMarker>>,
+    mut player_query: Query<(&mut physics::Speed, &CurrentPlayerState), With<Player>>,
     time: Res<Time>,
     spell_ui_active: Res<ui::SpellUiActive>,
 ) {
@@ -282,41 +276,32 @@ fn player_movement(
         return;
     }
     let action_state = action_state.single();
-    let mut speed = player_query.single_mut();
-    let mut anim_next_state = anim_query.single_mut();
+    let (mut speed, player_state) = player_query.single_mut();
 
-    let mut total_offset = Vec2::splat(0.0);
+	if player_state.0 != PlayerState::Knockback {
+		let mut total_offset = Vec2::splat(0.0);
+		
+		if player_state.0 == PlayerState::Normal {
+			if action_state.pressed(Action::Up) {
+				total_offset.y -= 1.0;
+			}
+			if action_state.pressed(Action::Down) {
+				total_offset.y += 1.0;
+			}
+			if action_state.pressed(Action::Right) {
+				total_offset.x += 1.0;
+			}
+			if action_state.pressed(Action::Left) {
+				total_offset.x -= 1.0;
+			}
+		}
 
-    if action_state.pressed(Action::Up) {
-        total_offset.y -= 1.0;
-    }
-    if action_state.pressed(Action::Down) {
-        total_offset.y += 1.0;
-    }
-    if action_state.pressed(Action::Right) {
-        total_offset.x += 1.0;
-    }
-    if action_state.pressed(Action::Left) {
-        total_offset.x -= 1.0;
-    }
+		// Update speed
+		let target_speed = total_offset.normalize_or_zero() * SPEED;
 
-    // Update speed
-    let target_speed = total_offset.normalize_or_zero() * SPEED;
-
-    speed.0.x = update_speed(speed.0.x, target_speed.x, time.delta_seconds());
-    speed.0.y = update_speed(speed.0.y, target_speed.y, time.delta_seconds());
-
-    // Update animation info
-    if speed.0.x > 0.1 {
-        anim_next_state.facing_dir = FacingDir::Right;
-    } else if speed.0.x < -0.1 {
-        anim_next_state.facing_dir = FacingDir::Left;
-    }
-    anim_next_state.set_state_if_priority(if speed.0.length() > 1.0 {
-        AnimationGeneralState::Walk
-    } else {
-        AnimationGeneralState::Idle
-    });
+		speed.0.x = update_speed(speed.0.x, target_speed.x, time.delta_seconds());
+		speed.0.y = update_speed(speed.0.y, target_speed.y, time.delta_seconds());
+	}
 }
 
 const SPEED: f32 = 70.0;
@@ -366,8 +351,8 @@ fn update_speed(current_speed: f32, target_speed: f32, delta: f32) -> f32 {
 
 // Spellcasting
 fn update_spell_casting(
-    mut query: Query<(&Transform, &ActionState<Action>, &mut spells::RuneCastQueue), With<Player>>,
-    anim_query: Query<&AnimationNextState, With<PlayerSpriteMarker>>,
+    mut query: Query<(&Transform, &ActionState<Action>, &CurrentPlayerState, &mut spells::RuneCastQueue), With<Player>>,
+    anim_query: Query<&PlayerAnimationState, With<PlayerSpriteMarker>>,
     camera_query: Query<(&Camera, &GlobalTransform)>,
     equipped: Res<spells::EquippedRunes>,
     spell_ui_active: Res<ui::SpellUiActive>,
@@ -380,8 +365,13 @@ fn update_spell_casting(
         return;
     }
 
-    let (transform, action_state, mut spell_queue) = query.single_mut();
+    let (transform, action_state, player_state, mut spell_queue) = query.single_mut();
 
+	if player_state.0 == PlayerState::Knockback {
+		spell_queue.clear();
+		return;
+	}
+	
     // Find which ones to add
     for (idx, comp_action) in SPELL_COMP_ACTIONS.iter().enumerate() {
         if action_state.just_pressed(*comp_action) {
