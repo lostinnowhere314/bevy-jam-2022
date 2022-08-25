@@ -54,8 +54,23 @@ impl<T: EnemyAIState> EnemyBundle<T> {
 		spatial: SpatialBundle, 
 		global_rng: &mut GlobalRng,
 	) -> Self {
+		EnemyBundle::<T>::with_state(
+			T::default(),
+			max_health, 
+			collider, 
+			spatial, 
+			global_rng,
+		)
+	}
+	pub fn with_state(
+		ai_state: T,
+		max_health: i32, 
+		collider: physics::Collider, 
+		spatial: SpatialBundle, 
+		global_rng: &mut GlobalRng,
+	) -> Self {
 		EnemyBundle {
-			ai_state: T::default(),
+			ai_state,
 			ai_data: AIGeneralState {
 				has_noticed_player: false,
 				view_radius: 200.0,
