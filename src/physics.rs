@@ -1,5 +1,8 @@
 use super::{ui, expand_vec2};
-use bevy::prelude::*;
+use bevy::{
+	prelude::*,
+	transform::transform_propagate_system,
+};
 use std::marker::{Send, Sync, PhantomData};
 use std::ops::{Deref, DerefMut};
 use itertools::Itertools;
@@ -279,7 +282,7 @@ impl<T: Send + Sync + 'static> Plugin for CollisionPlugin<T> {
     fn build(&self, app: &mut App) {
         app
 			.insert_resource(ActiveCollisions::<T>::new())
-			.add_system_to_stage(CoreStage::PostUpdate, resolve_collisions::<T>);
+			.add_system_to_stage(CoreStage::PostUpdate, resolve_collisions::<T>.after(transform_propagate_system));
     }
 }
 
@@ -315,7 +318,7 @@ impl<T: Send + Sync + 'static> Plugin for SymmetricCollisionPlugin<T> {
     fn build(&self, app: &mut App) {
         app
 			.insert_resource(ActiveCollisions::<T>::new())
-			.add_system_to_stage(CoreStage::PostUpdate, resolve_collisions_symmetric::<T>);
+			.add_system_to_stage(CoreStage::PostUpdate, resolve_collisions_symmetric::<T>.after(transform_propagate_system));
     }
 }
 
