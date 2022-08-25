@@ -63,7 +63,8 @@ if __name__ == '__main__':
 
     # Go through the images
     items = [
-        ('player.pdn', 'player/player.png')
+        ('player.pdn', 'player/player.png'),
+        ('player-staff.pdn', 'player/player-staff.png'),
     ]
     
     for source, dest in items:
