@@ -87,7 +87,7 @@ impl Collider {
 			Self::Circle { center, radius } =>
 				Self::Circle {
 					center: transform_in_plane(center, transform),
-					radius: radius,
+					radius,
 				},
 			Self::LineSegment(point1, point2) => 
 				Self::LineSegment(
@@ -176,7 +176,7 @@ impl Collider {
 			},
 			_ => match other {
 				Self::Circle {..} => {
-					other.intersects(&self)
+					other.intersects(self)
 				},
 				_ => panic!("intersection testing that does not involve a circle is unsupported")
 			}
@@ -299,7 +299,7 @@ pub fn resolve_collisions<T: Send + Sync + 'static> (
 	
 	for (source_entity, source_collider) in source_iter {
 		for (recip_entity, recip_collider) in &recip_iter {
-			if source_collider.intersects(&recip_collider) {
+			if source_collider.intersects(recip_collider) {
 				collisions.push(Collision {
 					source_entity,
 					source_collider: source_collider.clone(),
@@ -335,7 +335,7 @@ fn resolve_collisions_symmetric<T: Send + Sync + 'static> (
 			Some((entity1, collider1)), 
 			Some((entity2, collider2))
 		) = (pair.first(), pair.last()) {
-			if collider1.intersects(&collider2) {
+			if collider1.intersects(collider2) {
 				collisions.push(Collision {
 					source_entity: *entity1,
 					source_collider: collider1.clone(),

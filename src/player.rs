@@ -75,7 +75,7 @@ fn player_setup(
 		.insert(physics::CollisionRecipient::<physics::WallCollidable>::new(collider.clone()))
 		.insert(physics::CollisionRecipient::<physics::DamagesPlayer>::new(collider.clone()))
 		.insert(physics::ColliderActive::<physics::DamagesPlayer>::new(true))
-		.insert(physics::SymmetricCollisionSource::<physics::TakesSpace>::new(collider.clone()))
+		.insert(physics::SymmetricCollisionSource::<physics::TakesSpace>::new(collider))
         .with_children(|parent| {
             // Manage the sprite properly
             parent

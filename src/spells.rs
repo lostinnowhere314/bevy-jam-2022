@@ -763,7 +763,7 @@ fn get_sprite_asset_path(element: SpellElement, size: SpellSize) -> String {
 		SpellSize::Large => "large",
 	};
 	
-	String::from("spells/".to_owned() + element_str + "-" + size_str + ".png")
+	"spells/".to_owned() + element_str + "-" + size_str + ".png"
 }
 
 /// Load spell sprites (for projectiles)

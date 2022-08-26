@@ -118,7 +118,7 @@ fn knockback_pre_update(
 	let decay_factor = base.powf(time.delta_seconds());
 	
 	for (mut knockback, mut speed) in query.iter_mut() {
-		knockback.0 = knockback.0 * decay_factor;
+		knockback.0 *= decay_factor;
 		
 		speed.0 -= knockback.0;
 	}

@@ -104,11 +104,7 @@ fn update_queued_rune_containers(
 			queue.len() - N_QUEUED_SHOW + index_container.0
 		};
 		
-		rune_container.0 = if let Some(rune) = queue.get(show_index) {
-			Some(*rune)
-		} else {
-			None
-		}
+		rune_container.0 = queue.get(show_index).copied();
 	}
 }
 
@@ -171,8 +167,6 @@ fn setup_spell_ui(
 	
 	// Set up rune selection slots ////////////////////////////////
 	for (i, &path) in spell_slot_file_paths.iter().enumerate() {
-		let image_handle: Handle<Image> = asset_server.load(path);
-		
 		// When UI is closed
 		commands
 			.spawn_bundle(NodeBundle {
@@ -422,19 +416,15 @@ fn update_spell_selection(
 				}
 				// Clear it from the selected spells if it's there already
 				for j in 0..5 {
-					if let Some(maybe_rune) = selected_runes.0.get_mut(j) {
-						if let Some(rune) = maybe_rune {
-							if *rune == inventory_slot.rune {
-								*maybe_rune = None;
-							}
+					if let Some(Some(rune)) = selected_runes.0.get(j) {
+						if *rune == inventory_slot.rune {
+							selected_runes.set(j, None);
 						}
 					}
 				}
 				
 				// Set it to the new rune
-				if let Some(elem) = selected_runes.0.get_mut(action_idx) {
-					*elem = Some(inventory_slot.rune);
-				}
+				selected_runes.set(action_idx, Some(inventory_slot.rune));
 			}
 		}
 	}
