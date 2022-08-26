@@ -283,7 +283,7 @@ fn setup_spell_ui(
 		new_mouseover_targets.push(MouseoverTargetSpace {
 			target: MouseoverTarget::SpellSelectedSlot(i),
 			top: selected_row_top,
-			left: 320.0 + (-20.0 + (2.0-i as f32) * 44.0),
+			left: 320.0 + (-20.0 + (i as f32 - 2.0) * 44.0),
 			width: 20.0 * 2.0,
 			height: 24.0 * 2.0,
 			source_entity: selection_slot,
