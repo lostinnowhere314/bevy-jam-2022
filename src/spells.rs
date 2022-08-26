@@ -6,15 +6,9 @@ pub struct SpellPlugin;
 
 impl Plugin for SpellPlugin {
     fn build(&self, app: &mut App) {
-        // TODO temp for testing
-        let mut equipped_runes = EquippedRunes::new();
-        equipped_runes.set(0, Some(Rune::ElementRune(SpellElement::Fire)));
-        equipped_runes.set(1, Some(Rune::ElementRune(SpellElement::Earth)));
-        equipped_runes.set(2, Some(Rune::ElementRune(SpellElement::Water)));
-        equipped_runes.set(3, Some(Rune::ElementRune(SpellElement::Air)));
-        equipped_runes.set(4, Some(Rune::ShapeRune(SpellShape::Scatter)));
-
-        app.insert_resource(equipped_runes)
+        app
+			.insert_resource(EquippedRunes::new())
+			.insert_resource(RuneInventory::new())
 			.add_event::<SpellDespawnEvent>()
 			.add_event::<CreateSpellEvent>()
             .add_startup_system(setup_spell_sprites)
@@ -195,10 +189,50 @@ impl EquippedRunes {
     }
 }
 
-// Rune inventory will be components
-#[derive(Component, Debug)]
+// Rune inventory will be stored in a resource
+#[derive(Debug)]
+pub struct RuneInventory(pub Vec<RuneInventorySlot>);
+impl RuneInventory {
+	fn new() -> Self {
+		RuneInventory(vec![
+			RuneInventorySlot {
+				rune: Rune::ElementRune(SpellElement::Water),
+				unlocked: true,
+			},
+			RuneInventorySlot {
+				rune: Rune::ElementRune(SpellElement::Air),
+				unlocked: true,
+			},
+			RuneInventorySlot {
+				rune: Rune::ElementRune(SpellElement::Earth),
+				unlocked: true,
+			},
+			RuneInventorySlot {
+				rune: Rune::ElementRune(SpellElement::Fire), 
+				unlocked: true,
+			},
+			RuneInventorySlot {
+				rune: Rune::ShapeRune(SpellShape::Orb), 
+				unlocked: true,
+			},
+			RuneInventorySlot {
+				rune: Rune::ShapeRune(SpellShape::Line), 
+				unlocked: true,
+			},
+			RuneInventorySlot {
+				rune: Rune::ShapeRune(SpellShape::Burst), 
+				unlocked: true,
+			},
+			RuneInventorySlot {
+				rune: Rune::ShapeRune(SpellShape::Scatter), 
+				unlocked: true,
+			},
+		])
+	}
+}
+
+#[derive(Debug)]
 pub struct RuneInventorySlot {
-	pub index: u32,
 	pub rune: Rune, 
 	pub unlocked: bool
 }
@@ -407,10 +441,10 @@ impl SpellShape {
 	fn get_base_speed(&self) -> f32 {
 		match self {
 			Self::NoShape => 0.0,
-			Self::Orb => 100.0,
-			Self::Line => 0.0,
-			Self::Burst => 200.0,
-			Self::Scatter => 200.0,
+			Self::Orb => 80.0,
+			Self::Line => 120.0,
+			Self::Burst => 160.0,
+			Self::Scatter => 160.0,
 		}
 	}
 	
@@ -493,7 +527,7 @@ pub fn process_spell_enemy_collisions(
 				enemy_health.0 -= spell_data.get_damage();
 			}
 			// Apply knockback
-			enemy_knockback.0 += speed.normalize_or_zero() * spell_data.knockback;
+			enemy_knockback.0 = speed.normalize_or_zero() * spell_data.knockback;
 			
 			println!("{:?}", enemy_health);
 			
@@ -597,7 +631,7 @@ fn create_spells_from_events(
 					transform: Transform::from_translation(expand_vec2(event.position)),
 					..default()
 				})
-				.insert(physics::Speed(movement_direction * spell_data.speed))
+				.insert(physics::Speed(movement_direction * speed))
 				.with_children(|parent| {
 					parent
 						.spawn()
@@ -641,8 +675,10 @@ fn setup_rune_sprites(
     asset_server: Res<AssetServer>,
 ) {
 	let sprite_data = [
-		(Rune::ShapeRune(SpellShape::Orb), "no-sprite.png"),
-		(Rune::ShapeRune(SpellShape::Line), "no-sprite.png"),
+		(Rune::ShapeRune(SpellShape::Orb), "ui/rune-orb.png"),
+		(Rune::ShapeRune(SpellShape::Line), "ui/rune-line.png"),
+		(Rune::ShapeRune(SpellShape::Scatter), "ui/rune-scatter.png"),
+		(Rune::ShapeRune(SpellShape::Burst), "ui/rune-burst.png"),
 		(Rune::ElementRune(SpellElement::Fire), "ui/rune-fire.png"),
 		(Rune::ElementRune(SpellElement::Water), "ui/rune-water.png"),
 		(Rune::ElementRune(SpellElement::Earth), "ui/rune-earth.png"),

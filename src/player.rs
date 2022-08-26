@@ -38,6 +38,7 @@ fn player_setup(
 	shadow_texture: Res<sprite::ShadowTexture>,
 ) {
     // Player sprite info
+	// TODO put in resource
     let player_texture = asset_server.load("player/player.png");
     let player_texture_atlas = texture_atlases.add(TextureAtlas::from_grid(
         player_texture,
@@ -472,7 +473,7 @@ fn get_input_map() -> InputMap<Action> {
     .build()
 }
 
-const SPELL_COMP_ACTIONS: [Action; 5] = [
+pub const SPELL_COMP_ACTIONS: [Action; 5] = [
     Action::SpellComp0,
     Action::SpellComp1,
     Action::SpellComp2,
