@@ -60,6 +60,8 @@ fn setup(mut commands: Commands) {
     });
 }
 
+// Utility functions for converting between actual space and the space that we're pretending everything
+// lives in for physics
 fn expand_vec2(vec: Vec2) -> Vec3 {
 	Vec3::new(vec.x, 0.0, vec.y)
 }

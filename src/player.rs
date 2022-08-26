@@ -464,7 +464,7 @@ fn get_input_map() -> InputMap<Action> {
         (KeyCode::Key1, Action::SpellComp0),
         (KeyCode::Key2, Action::SpellComp1),
         (KeyCode::Key3, Action::SpellComp2),
-        (KeyCode::Q, Action::SpellComp3),
+        (KeyCode::Key4, Action::SpellComp3),
         (KeyCode::E, Action::SpellComp4),
     ])
     .insert(MouseButton::Left, Action::CastSpell)
