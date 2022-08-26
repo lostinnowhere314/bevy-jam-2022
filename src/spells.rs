@@ -1,5 +1,6 @@
-use super::{physics, sprite, ui, enemy, expand_vec2};
+use super::{physics, sprite, ui, enemy, expand_vec2, collapse_vec3};
 use bevy::{prelude::*, utils::HashMap};
+use bevy_turborand::*;
 
 pub struct SpellPlugin;
 
@@ -11,6 +12,7 @@ impl Plugin for SpellPlugin {
         equipped_runes.set(1, Some(Rune::ElementRune(SpellElement::Earth)));
         equipped_runes.set(2, Some(Rune::ElementRune(SpellElement::Water)));
         equipped_runes.set(3, Some(Rune::ElementRune(SpellElement::Air)));
+        equipped_runes.set(4, Some(Rune::ShapeRune(SpellShape::Scatter)));
 
         app.insert_resource(equipped_runes)
 			.add_event::<SpellDespawnEvent>()
@@ -78,7 +80,7 @@ fn create_spell_recursive(runes: &[Rune], power_factor: f32) -> Option<SpellData
 						SpellShape::NoShape | SpellShape::Line => {
 							maybe_on_impact = Some(Box::new(sub_spell));
 						}
-						SpellShape::Orb => {
+						SpellShape::Orb | SpellShape::Burst | SpellShape::Scatter => {
 							maybe_on_disappear = Some(Box::new(sub_spell));
 						},
 					}
@@ -122,10 +124,11 @@ fn create_spell_recursive(runes: &[Rune], power_factor: f32) -> Option<SpellData
 	let spell_magnitude = match element {
 		SpellElement::Light => total_runes as f32 / 2.5,
 		SpellElement::Neutral => 0.0,
-		_ => Vec2::new((fire_ct - water_ct) as f32, (earth_ct - air_ct) as f32).length()
+		_ => Vec2::new(fire_ct as f32 - water_ct as f32, earth_ct as f32 - air_ct as f32).length()
 	};
 	
-	let damage = spell_magnitude 
+	let damage = 5.0
+		* spell_magnitude 
 		* layer_shape.get_damage_multiplier() 
 		* element.get_damage_multiplier()
 		* power_factor.sqrt();
@@ -139,7 +142,7 @@ fn create_spell_recursive(runes: &[Rune], power_factor: f32) -> Option<SpellData
 	} else {
 		0.0
 	};
-	let mana_cost = total_runes as f32
+	let mana_cost = 5.0 * total_runes as f32
 		+ layer_shape.get_cost_multiplier() * sub_cost;
 	
 	// Determine spell size //////////////////////////////////////////////
@@ -257,72 +260,50 @@ pub enum SpellElement {
 
 impl SpellElement {
 	fn get_speed_multiplier(&self) -> f32 {
-		unimplemented!()
+		match self {
+			Self::Neutral => 1.0,
+			Self::Fire => 1.0,
+			Self::Water => 0.5,
+			Self::Earth => 2.0,
+			Self::Air => 1.5,
+			Self::Metal => 2.0,
+			Self::Plant => 0.8,
+			Self::Electric => 3.0,
+			Self::Ice => 1.0,
+			Self::Light => 3.0,
+		}
 	}
 	
 	fn get_damage_multiplier(&self) -> f32 {
-		unimplemented!()
+		match self {
+			Self::Neutral => 0.0,
+			Self::Fire => 1.0,
+			Self::Water => 0.8,
+			Self::Earth => 0.8,
+			Self::Air => 0.5,
+			Self::Metal => 1.4,
+			Self::Plant => 0.8,
+			Self::Electric => 2.0,
+			Self::Ice => 1.4,
+			Self::Light => 5.0,
+		}
 	}
 	
 	fn get_knockback_multiplier(&self) -> f32 {
-		unimplemented!()
-	}
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum SpellShape {
-    NoShape,
-    Orb,
-    Line,
-}
-
-impl SpellShape {
-	/// Applies to the current layer
-	fn get_damage_multiplier(&self) -> f32 {
-		unimplemented!()
-	}
-	
-	/// Applies to the layer below
-	fn get_cost_multiplier(&self) -> f32 {
-		unimplemented!()
-	}
-	
-	/// Applies to the layer below
-	fn get_power_multiplier(&self) -> f32 {
-		unimplemented!()
-	}
-	
-	/// Applies to the current layer
-	fn get_base_speed(&self) -> f32 {
-		unimplemented!()
-	}
-	
-	/// Applies to the current layer
-	fn get_base_knockback(&self) -> f32 {
-		unimplemented!()
-	}
-}
-
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-enum SpellSize {
-    Tiny,
-    Small,
-    Normal,
-    Large,
-}
-
-impl SpellSize {
-	fn from_size_factor(size_factor: f32) -> Self {
-		match size_factor {
-			x if x < 0.2 => SpellSize::Tiny,
-			x if x < 0.9 => SpellSize::Small,
-			x if x < 4.0 => SpellSize::Normal,
-			_ => SpellSize::Large,
+		match self {
+			Self::Neutral => 0.1,
+			Self::Fire => 0.7,
+			Self::Water => 1.5,
+			Self::Earth => 1.0,
+			Self::Air => 1.8,
+			Self::Metal => 1.0,
+			Self::Plant => 2.5,
+			Self::Electric => 0.1,
+			Self::Ice => 1.8,
+			Self::Light => 0.4,
 		}
 	}
-}
-
-impl SpellElement {
+	
     fn as_vec(&self) -> Vec2 {
         match self {
             Self::Neutral => Vec2::new(0.0, 0.0),
@@ -344,10 +325,10 @@ impl SpellElement {
 			return Self::Light;
 		}
 
-		let fire_water = water_ct - fire_ct;
-		let earth_air = air_ct - earth_ct;
+		let fire_water = water_ct as f32 - fire_ct as f32;
+		let earth_air = air_ct as f32 - earth_ct as f32;
 		
-		let element_vec = Vec2::new(fire_water as f32, earth_air as f32).normalize_or_zero();
+		let element_vec = Vec2::new(fire_water, earth_air).normalize_or_zero();
 		SpellElement::from_element_vec(element_vec)
 	}		
 
@@ -375,25 +356,150 @@ impl SpellElement {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SpellShape {
+    NoShape,
+    Orb,
+    Line,
+    Burst,
+    Scatter,
+}
+
+impl SpellShape {
+	/// Applies to the current layer
+	fn get_damage_multiplier(&self) -> f32 {
+		match self {
+			Self::NoShape => 1.0,
+			Self::Orb => 1.0,
+			Self::Line => 1.0,
+			Self::Burst => 0.7,
+			Self::Scatter => 0.5,
+		}
+	}
+	
+	/// Applies to the layer below
+	fn get_cost_multiplier(&self) -> f32 {
+		match self {
+			Self::NoShape => 1.0,
+			Self::Orb => 1.1,
+			Self::Line => 1.3,
+			Self::Burst => 1.2,
+			Self::Scatter => 1.3,
+		}
+	}
+	
+	/// Applies to the layer below
+	fn get_power_multiplier(&self) -> f32 {
+		match self {
+			Self::NoShape => 1.2,
+			Self::Orb => 1.0,
+			Self::Line => 0.6,
+			Self::Burst => 0.6,
+			Self::Scatter => 0.3,
+		}
+	}
+	
+	/// Applies to the current layer
+	fn get_base_speed(&self) -> f32 {
+		match self {
+			Self::NoShape => 0.0,
+			Self::Orb => 100.0,
+			Self::Line => 0.0,
+			Self::Burst => 200.0,
+			Self::Scatter => 200.0,
+		}
+	}
+	
+	/// Applies to the current layer
+	fn get_base_knockback(&self) -> f32 {
+		let multiplier = match self {
+			Self::NoShape => 1.2,
+			Self::Orb => 1.0,
+			Self::Line => 1.0,
+			Self::Burst => 1.0,
+			Self::Scatter => 1.0,
+		};
+		
+		100.0 * multiplier
+	}
+	
+	fn get_num_projectiles(&self) -> i32 {
+		match self {
+			Self::NoShape | Self::Orb => 1,
+			Self::Line | Self::Burst => 3,
+			Self::Scatter => 7,
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+enum SpellSize {
+    Tiny,
+    Small,
+    Normal,
+    Large,
+}
+
+impl SpellSize {
+	fn from_size_factor(size_factor: f32) -> Self {
+		match size_factor {
+			x if x < 0.2 => SpellSize::Tiny,
+			x if x < 0.9 => SpellSize::Small,
+			x if x < 4.0 => SpellSize::Normal,
+			_ => SpellSize::Large,
+		}
+	}
+	
+	fn get_shadow_index(&self) -> usize {
+		match self {
+			Self::Tiny => 0,
+			Self::Small => 0,
+			Self::Normal => 1,
+			Self::Large => 2,
+		}
+	}
+	
+	fn get_collide_radius(&self) -> f32 {
+		match self {
+			Self::Tiny => 4.0,
+			Self::Small => 6.0,
+			Self::Normal => 8.0,
+			Self::Large => 12.0,
+		}
+	}
+}
+
 /// Resolve spell-enemy collisions
 pub fn process_spell_enemy_collisions(
-	spell_query: Query<&SpellData, With<SpellMarker>>,
-	mut enemy_query: Query<&mut enemy::EnemyHealth>,
+	spell_query: Query<(&SpellData, &Transform, &physics::Speed), With<SpellMarker>>,
+	mut enemy_query: Query<(&mut enemy::EnemyHealth, &mut enemy::EnemyKnockbackComponent)>,
 	collisions: Res<physics::ActiveCollisions<physics::DamagesEnemies>>,
 	mut spell_despawn_events: EventWriter<SpellDespawnEvent>,
-	mut _create_spell_events: EventWriter<CreateSpellEvent>,
+	mut create_spell_events: EventWriter<CreateSpellEvent>,
 ) {
 	for collision in collisions.iter() {
-		if let (Ok(spell_data), Ok(mut enemy_health)) = (spell_query.get(collision.source_entity), enemy_query.get_mut(collision.recip_entity)) {
+		if let (
+			Ok((spell_data, transform, speed)), Ok((mut enemy_health, mut enemy_knockback))
+		) = (
+			spell_query.get(collision.source_entity), enemy_query.get_mut(collision.recip_entity)
+		) {
 			println!("Collided with an enemy! :)");
-			
+			// Do damage
 			if spell_data.get_damage() > 0 {
 				enemy_health.0 -= spell_data.get_damage();
 			}
+			// Apply knockback
+			enemy_knockback.0 += speed.normalize_or_zero() * spell_data.knockback;
+			
 			println!("{:?}", enemy_health);
 			
 			if let Some(new_spell_data) = &spell_data.on_collide {
-				unimplemented!()
+				create_spell_events.send(CreateSpellEvent {
+					// clone the unboxed value
+					spell_data: (**new_spell_data).clone(),
+					position: collapse_vec3(transform.translation),
+					move_direction: speed.0,
+				})
 			}
 			
 			spell_despawn_events.send(SpellDespawnEvent(collision.source_entity));
@@ -404,13 +510,18 @@ pub fn process_spell_enemy_collisions(
 fn despawn_spells(
 	mut commands: Commands,
 	mut despawn_events: EventReader<SpellDespawnEvent>,
-	spell_query: Query<&SpellData>,
-	mut _create_spell_events: EventWriter<CreateSpellEvent>,
+	spell_query: Query<(&SpellData, &Transform, &physics::Speed), With<SpellMarker>>,
+	mut create_spell_events: EventWriter<CreateSpellEvent>,
 ) {
 	for event in despawn_events.iter() {
-		if let Ok(spell_data) = spell_query.get(event.0) {
+		if let Ok((spell_data, transform, speed)) = spell_query.get(event.0) {
 			if let Some(new_spell_data) = &spell_data.on_end {
-				unimplemented!()
+				create_spell_events.send(CreateSpellEvent {
+					// clone the unboxed value
+					spell_data: (**new_spell_data).clone(),
+					position: collapse_vec3(transform.translation),
+					move_direction: speed.0,
+				})
 			}
 		}
 		
@@ -423,50 +534,84 @@ fn create_spells_from_events(
     all_spell_sprites: Res<AllSpellSprites>,
 	mut create_events: EventReader<CreateSpellEvent>,
 	shadow_texture: Res<sprite::ShadowTexture>,
+	mut global_rng: ResMut<GlobalRng>,
 ) {
 	for event in create_events.iter() {
+		let spell_data = &event.spell_data;
+		
 		let texture_data = all_spell_sprites
-			.get(&event.spell_data)
+			.get(spell_data)
 			.expect("failed to get spell projectile sprite");
 
-		let movement_direction = match event.move_direction.try_normalize() {
-			Some(m) => m,
-			None => continue,
+		let base_movement_dir = match event.move_direction.try_normalize() {
+			Some(d) => d,
+			None => collapse_vec3(
+				Quat::from_rotation_y(global_rng.f32() * std::f32::consts::TAU) * Vec3::X
+			)
 		};
-
-		// TODO determine dynamically
-		let speed = 100.0;
-
-		commands
-			.spawn()
-			.insert(SpellMarker)
-			.insert(event.spell_data.clone())
-			.insert(physics::CollisionSource::<physics::DamagesEnemies>::new(
-				physics::Collider::Circle {
-					center: Vec2::ZERO,
-					// TODO determine dynamically. prob best related to spell size
-					radius: 8.0
+		
+		let n_projectiles = spell_data.shape.get_num_projectiles();
+		
+		for idx in 0..n_projectiles {
+			let movement_direction = (match spell_data.shape {
+					SpellShape::NoShape => Vec2::ZERO,
+					SpellShape::Orb => base_movement_dir,
+					SpellShape::Line => base_movement_dir,
+					SpellShape::Burst => {
+						let true_index = idx - 1;
+						collapse_vec3(
+							Quat::from_rotation_y(true_index as f32 * std::f32::consts::PI / 6.0)
+							* expand_vec2(base_movement_dir)
+						)
+					},
+					SpellShape::Scatter => {
+						collapse_vec3(
+							Quat::from_rotation_y(global_rng.f32() * std::f32::consts::TAU) * Vec3::X
+						) * 0.9 + event.move_direction.normalize_or_zero()
+					},
+			}).normalize_or_zero();
+			
+			let speed = spell_data.speed * (match spell_data.shape {
+				SpellShape::Line => {
+					let base = 0.8f32;
+					base.powf(idx as f32 - 1.0)
 				}
-			))
-			.insert_bundle(SpatialBundle {
-				transform: Transform::from_translation(expand_vec2(event.position)),
-				..default()
-			})
-			.insert(physics::Speed(movement_direction * speed))
-			.with_children(|parent| {
-				parent
-					.spawn()
-					.insert(sprite::FacingSpriteMarker)
-					.insert(sprite::SimpleAnimationMarker(true))
-					.insert(sprite::AnimationTimer(Timer::from_seconds(1.0 / 7.0, true)))
-					.insert(sprite::SpriteOffset(Vec3::Y * texture_data.y_offset))
-					.insert_bundle(SpriteSheetBundle {
-						texture_atlas: texture_data.texture_atlas.clone(),
-						..default()
-					});
-				// TODO determine index from spell size
-				parent.spawn_bundle(shadow_texture.get_shadow_bundle(1));
+				_ => 1.0,
 			});
+			
+			commands
+				.spawn()
+				.insert(SpellMarker)
+				.insert(event.spell_data.clone())
+				.insert(physics::CollisionSource::<physics::DamagesEnemies>::new(
+					physics::Collider::Circle {
+						center: Vec2::ZERO,
+						radius: spell_data.size.get_collide_radius()
+					}
+				))
+				.insert_bundle(SpatialBundle {
+					transform: Transform::from_translation(expand_vec2(event.position)),
+					..default()
+				})
+				.insert(physics::Speed(movement_direction * spell_data.speed))
+				.with_children(|parent| {
+					parent
+						.spawn()
+						.insert(sprite::FacingSpriteMarker)
+						.insert(sprite::SimpleAnimationMarker(true))
+						.insert(sprite::AnimationTimer(Timer::from_seconds(1.0 / 7.0, true)))
+						.insert(sprite::SpriteOffset(Vec3::Y * texture_data.y_offset))
+						.insert_bundle(SpriteSheetBundle {
+							texture_atlas: texture_data.texture_atlas.clone(),
+							..default()
+						});
+					parent.spawn_bundle(
+						shadow_texture.get_shadow_bundle(
+							spell_data.size.get_shadow_index()
+						)
+					);
+				});
+		}		
 	}
 }
 
