@@ -111,7 +111,7 @@ fn setup_spell_ui(
 		"ui/spell-slot-1.png",
 		"ui/spell-slot-2.png",
 		"ui/spell-slot-3.png",
-		"ui/spell-slot-q.png",
+		"ui/spell-slot-4.png",
 		"ui/spell-slot-e.png",
 	];
 	
