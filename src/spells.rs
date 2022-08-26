@@ -195,9 +195,13 @@ impl EquippedRunes {
     }
 }
 
-// Rune inventory will be components(?)
+// Rune inventory will be components
 #[derive(Component, Debug)]
-pub struct RuneInventorySlot(pub Option<Rune>);
+pub struct RuneInventorySlot {
+	pub index: u32,
+	pub rune: Rune, 
+	pub unlocked: bool
+}
 
 // Spells //////////////////////////////////////////////////////////////////////////////////////
 #[derive(Component, Debug)]
