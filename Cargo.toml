@@ -22,3 +22,6 @@ inherits = "release"
 # This doesn't increase compilation times compared to -O3, great improvements
 opt-level = "z"
 
+# Fixes a flickering bug that occurs on WASM for certain platforms
+[patch.crates-io]
+wgpu = { git = "https://github.com/mockersf/wgpu/", branch = "unconditional-clear-workaround" }
