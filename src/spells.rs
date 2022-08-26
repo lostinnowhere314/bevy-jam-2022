@@ -233,7 +233,7 @@ impl SpellData {
 }
 
 #[derive(Debug)]
-struct SpellDespawnEvent(Entity);
+pub struct SpellDespawnEvent(Entity);
 #[derive(Debug)]
 pub struct CreateSpellEvent {
 	pub spell_data: SpellData, 
@@ -376,7 +376,7 @@ impl SpellElement {
 }
 
 /// Resolve spell-enemy collisions
-fn process_spell_enemy_collisions(
+pub fn process_spell_enemy_collisions(
 	spell_query: Query<&SpellData, With<SpellMarker>>,
 	mut enemy_query: Query<&mut enemy::EnemyHealth>,
 	collisions: Res<physics::ActiveCollisions<physics::DamagesEnemies>>,

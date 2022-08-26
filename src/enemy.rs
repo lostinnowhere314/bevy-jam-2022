@@ -5,7 +5,7 @@ use bevy::{
 };
 use bevy_turborand::*;
 use std::f32::consts::PI;
-use super::{player, physics, sprite, ui, collapse_vec3, expand_vec2};
+use super::{player, physics, sprite, ui, spells, collapse_vec3, expand_vec2};
 
 pub struct EnemyPlugin;
 
@@ -13,7 +13,13 @@ impl Plugin for EnemyPlugin {
 	fn build(&self, app: &mut App) {
 		app
 			.add_system(enemy_ai_general_update)
-			.add_system(do_enemy_ai::<AIPeriodicCharge>)
+			.add_system_to_stage(CoreStage::PreUpdate, knockback_pre_update)
+			.add_system(
+				knockback_post_update
+					.before(physics::update_movement)
+					.after(spells::process_spell_enemy_collisions)
+			)
+			.add_system(do_enemy_ai::<AIPeriodicCharge>.before(knockback_post_update))
 			.add_system(clean_dead_enemies)
 			// TEST SYSTEM
 			.add_startup_system(enemy_test_system);
@@ -45,6 +51,7 @@ pub struct EnemyBundle<T: EnemyAIState> {
 	#[bundle]
 	spatial: SpatialBundle,
 	rng: RngComponent,
+	knockback: EnemyKnockbackComponent,
 }
 
 impl<T: EnemyAIState> EnemyBundle<T> {
@@ -83,7 +90,49 @@ impl<T: EnemyAIState> EnemyBundle<T> {
 			wall_collider: physics::CollisionRecipient::<physics::WallCollidable>::new(collider),
 			spatial,
 			rng: RngComponent::with_seed(global_rng.u64(0..=u64::MAX)),
+			knockback: EnemyKnockbackComponent::new(),
 		}
+	}
+}
+
+// Knockback handling ////////////////////////////////
+#[derive(Debug, Component)]
+pub struct EnemyKnockbackComponent(pub Vec2);
+
+impl EnemyKnockbackComponent {
+	fn new() -> Self {
+		Self(Vec2::ZERO)
+	}
+}
+
+fn knockback_pre_update(
+	mut query: Query<(&mut EnemyKnockbackComponent, &mut physics::Speed)>,
+	time: Res<Time>,
+    spell_ui_active: Res<ui::SpellUiActive>,
+) {
+	if spell_ui_active.0 {
+		return;
+	}
+	
+	let base = 0.1f32;
+	let decay_factor = base.powf(time.delta_seconds());
+	
+	for (mut knockback, mut speed) in query.iter_mut() {
+		knockback.0 = knockback.0 * decay_factor;
+		
+		speed.0 -= knockback.0;
+	}
+}
+
+fn knockback_post_update(
+	mut query: Query<(&EnemyKnockbackComponent, &mut physics::Speed)>,
+    spell_ui_active: Res<ui::SpellUiActive>,
+) {
+	if spell_ui_active.0 {
+		return;
+	}
+	for (knockback, mut speed) in query.iter_mut() {
+		speed.0 += knockback.0;
 	}
 }
 
@@ -97,7 +146,7 @@ pub struct AIGeneralState {
 #[derive(Component, Debug)]
 pub struct EnemyHealth(pub i32);
 
-// General systems ////////
+// General systems /////////////////////////////
 fn enemy_ai_general_update(
 	mut query: Query<(&mut AIGeneralState, &Transform), Without<player::Player>>,
 	player_query: Query<&Transform, With<player::Player>>,
@@ -151,7 +200,7 @@ fn clean_dead_enemies(
 	}
 }
 
-// AI types /////////////////
+// AI types //////////////////////////////////////////////////
 
 #[derive(Component)]
 pub struct AIPeriodicCharge {
