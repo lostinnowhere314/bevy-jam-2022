@@ -10,6 +10,7 @@ impl Plugin for UIPlugin {
 			.insert_resource(AllMouseoverTargets::new())
             .insert_resource(SpellUiActive(false))
             .insert_resource(CurrentMouseoverTarget(None))
+			.add_event::<MessageEvent>()
             .add_startup_system(setup_spell_ui)
             .add_system(update_spell_ui_visibility)
             .add_system(toggle_spell_ui)
@@ -21,7 +22,9 @@ impl Plugin for UIPlugin {
             .add_system_to_stage(CoreStage::PreUpdate, update_cursor_ui_target)
 			.add_startup_system(setup_player_ui)
 			.add_system(update_player_health_ui)
-			.add_system(update_player_mana_ui.after(player::update_spell_casting));
+			.add_system(update_player_mana_ui.after(player::update_spell_casting))
+			.add_startup_system(setup_message_ui)
+			.add_system(update_message_ui);
     }
 }
 
@@ -382,7 +385,131 @@ fn setup_spell_ui(
     all_mouseover_targets.0.append(&mut new_mouseover_targets);
 }
 
-/// Player health/mana UI /////////////
+// Message display UI
+// Event for setting a message
+pub struct MessageEvent {
+	pub message: Option<String>,
+	pub source: MessageSource,
+}
+
+#[derive(PartialEq, Eq, Copy, Clone)]
+pub enum MessageSource {
+	None,
+	ForceClear,
+}
+
+#[derive(Component)]
+struct MessageUI {
+	source: MessageSource,
+	has_message: bool,
+}
+// Marker component
+#[derive(Component)]
+struct MessageUIFrame;
+// Resource for test style
+struct MessageTextStyle(TextStyle);
+
+fn setup_message_ui(
+	mut commands: Commands,
+    asset_server: Res<AssetServer>,
+) {
+	// Load font and text style data
+	let font_handle = asset_server.load("font/Mechanical-g5Y5.otf");
+	let text_style = TextStyle {
+		font: font_handle,
+		font_size: 10.0,
+		color: Color::hex("B8EEEB").unwrap(),
+	};
+	commands.insert_resource(MessageTextStyle(text_style.clone()));
+	
+	commands.spawn()
+		.insert(MessageUIFrame)
+		.insert_bundle(NodeBundle {
+			node: get_scaled_size(480, 32),
+			style: Style {
+				position_type: PositionType::Absolute,
+				position: UiRect {
+					top: Val::Px(400.0 - 68.0),
+					left: Val::Px(320.0 - 240.0),
+					..default()
+				},
+				..default()
+			},
+			..default()
+		}).with_children(|parent| {
+			parent.spawn_bundle(ImageBundle {
+					node: get_scaled_size(480, 32),
+					style: Style {
+						position_type: PositionType::Absolute,
+						position: UiRect {
+							top: Val::Px(0.0),
+							left: Val::Px(0.0),
+							..default()
+						},
+						..default()
+					},
+					image: UiImage(asset_server.load("ui/message-panel.png")),
+					..default()
+				});
+			parent.spawn()
+				.insert(MessageUI {
+					source: MessageSource::None,
+					has_message: false
+				})
+				.insert_bundle(TextBundle {
+					node: get_scaled_size(246, 20),
+					style: Style {
+						position_type: PositionType::Absolute,
+						position: UiRect {
+							top: Val::Px(17.0),
+							left: Val::Px(20.0),
+							..default()
+						},
+						..default()
+					},
+					text: Text::from_section(
+						"Testing... trying an extremely long string to see if it handles wrapping\nproperly (it doesn't, have to do it manually...), and what\nhappens if it overflows...",
+						text_style
+					),
+					visibility: Visibility { is_visible: true },
+					..default()
+				});
+		});
+}
+
+fn update_message_ui(
+	mut text_query: Query<(&mut Text, &mut MessageUI)>,
+	mut frame_query: Query<&mut Visibility, With<MessageUIFrame>>,
+	mut message_events: EventReader<MessageEvent>,
+	text_style: Res<MessageTextStyle>,
+) {
+	let (mut text, mut message_ui_data) = text_query.single_mut();
+	let mut visibility = frame_query.single_mut();
+	
+	// Update the text
+	for event in message_events.iter() {
+		if let Some(message) = &event.message {
+			// New message sent, always replace in this case
+			*text = Text::from_section(
+				message,
+				text_style.0.clone()
+			);
+			message_ui_data.source = event.source;
+			message_ui_data.has_message = true;
+		} else if message_ui_data.has_message {
+			// Decide if we should clear it
+			if event.source == message_ui_data.source || event.source == MessageSource::ForceClear {
+				message_ui_data.has_message = false;
+				message_ui_data.source = MessageSource::None;
+			}
+		}
+	}
+	
+	// Update visibility
+	visibility.is_visible = message_ui_data.has_message;
+}
+
+// Player health/mana UI /////////////
 fn setup_player_ui(
 	mut commands: Commands,
     asset_server: Res<AssetServer>,
