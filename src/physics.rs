@@ -1,4 +1,4 @@
-use super::{ui, expand_vec2};
+use super::{ui, expand_vec2, collapse_vec3};
 use bevy::{
 	prelude::*,
 	transform::transform_propagate_system,
@@ -13,12 +13,15 @@ impl Plugin for GeneralPhysicsPlugin {
     fn build(&self, app: &mut App) {
         app
 			.add_system(update_movement)
+			.add_system(do_takes_space_collisions.after(update_movement))
 			.add_plugin(CollisionPlugin::<WallCollidable>::default())
 			.add_plugin(CollisionPlugin::<InteractsWithPlayer>::default())
 			.add_plugin(CollisionPlugin::<InteractsWithEnemies>::default())
 			.add_plugin(SymmetricCollisionPlugin::<TakesSpace>::default());
     }
 }
+
+
 
 // Specific collision categories
 #[derive(Default)]
@@ -30,6 +33,51 @@ pub struct InteractsWithEnemies;
 // symmetric for player and enemies; prevents occupying same space
 #[derive(Default)]
 pub struct TakesSpace;
+
+// Walls and TakesSpace collisions
+
+
+
+fn do_takes_space_collisions(
+	mut pos_query: Query<&mut Transform, With<SymmetricCollisionSource<TakesSpace>>>,
+	collisions: Res<ActiveCollisions<TakesSpace>>,
+) {
+	for collision in collisions.iter() {
+		// Get the colliders
+		if let (Collider::Circle {
+			center: _,
+			radius: radius1,
+		}, Collider::Circle {
+			center: _,
+			radius: radius2,
+		}) = (&collision.source_collider, &collision.recip_collider) {
+			// Get the transforms
+			if let Ok([mut transform1, mut transform2]) = 
+				pos_query.get_many_mut([collision.source_entity, collision.recip_entity])
+			 {
+				let pos_diff_vec = collapse_vec3(transform1.translation)
+					- collapse_vec3(transform2.translation);
+				let rad_sum = radius1 + radius2;
+				if rad_sum > pos_diff_vec.length() {
+					// They're (still) too close; move them apart
+					let move_dist = (rad_sum - pos_diff_vec.length()) / 2.0;
+					let dir = if let Some(d) = pos_diff_vec.try_normalize() {
+						d
+					} else {
+						Vec2::X
+					};
+					
+					let move_vec = expand_vec2(move_dist * dir);
+					
+					transform1.translation += move_vec;
+					transform2.translation -= move_vec;
+				}
+			}
+		} else {
+			panic!("TakesSpace collision type must use Circle type collider")
+		}
+	}
+}
 
 #[derive(Component, Deref, DerefMut, Debug)]
 pub struct Speed(pub Vec2);

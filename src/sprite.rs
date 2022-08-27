@@ -135,6 +135,29 @@ impl SimpleAnimationBundle {
 	}
 }
 
+#[derive(Bundle)]
+pub struct FacingSpriteBundle {
+	#[bundle]
+	sprite: SpriteBundle,
+	offset: SpriteOffset,
+	facing_marker: FacingSpriteMarker,
+}
+impl FacingSpriteBundle {
+	pub fn new(
+		texture: Handle<Image>,
+		y_offset: f32,
+	) -> Self {
+		Self {
+			sprite: SpriteBundle {
+				texture,
+				..default()
+			},
+			offset: SpriteOffset(Vec3::new(0.0, y_offset, 0.0)),
+			facing_marker: FacingSpriteMarker,
+		}
+	}
+}
+
 
 fn simple_animation_update(
     time: Res<Time>,

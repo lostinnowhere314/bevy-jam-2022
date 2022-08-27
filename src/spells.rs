@@ -199,20 +199,20 @@ impl RuneInventory {
 	fn new() -> Self {
 		RuneInventory(vec![
 			RuneInventorySlot {
+				rune: Rune::ElementRune(SpellElement::Fire),
+				unlocked: true,//false,
+			},
+			RuneInventorySlot {
 				rune: Rune::ElementRune(SpellElement::Water),
 				unlocked: true,
 			},
 			RuneInventorySlot {
-				rune: Rune::ElementRune(SpellElement::Air),
-				unlocked: true,
-			},
-			RuneInventorySlot {
 				rune: Rune::ElementRune(SpellElement::Earth),
-				unlocked: true,
+				unlocked: true,//false,
 			},
-			RuneInventorySlot {
-				rune: Rune::ElementRune(SpellElement::Fire), 
-				unlocked: true,
+			RuneInventorySlot { 
+				rune: Rune::ElementRune(SpellElement::Air),
+				unlocked: true,//false,
 			},
 			RuneInventorySlot {
 				rune: Rune::ShapeRune(SpellShape::Orb), 
@@ -220,15 +220,15 @@ impl RuneInventory {
 			},
 			RuneInventorySlot {
 				rune: Rune::ShapeRune(SpellShape::Line), 
-				unlocked: true,
+				unlocked: false,
 			},
 			RuneInventorySlot {
 				rune: Rune::ShapeRune(SpellShape::Burst), 
-				unlocked: true,
+				unlocked: false,
 			},
 			RuneInventorySlot {
 				rune: Rune::ShapeRune(SpellShape::Scatter), 
-				unlocked: true,
+				unlocked: false,
 			},
 		])
 	}
@@ -486,7 +486,7 @@ impl SpellSize {
 		match size_factor {
 			x if x < 0.2 => SpellSize::Tiny,
 			x if x < 0.9 => SpellSize::Small,
-			x if x < 3.0 => SpellSize::Normal,
+			x if x < 2.7 => SpellSize::Normal,
 			_ => SpellSize::Large,
 		}
 	}
@@ -704,46 +704,55 @@ struct SpellSpriteDimensions(usize,usize,usize,usize);
 // TODO fill out
 fn get_spell_sprite_dimensions(element: SpellElement, size: SpellSize) -> SpellSpriteDimensions {
 	match (element, size) {
-		(SpellElement::Neutral, SpellSize::Tiny) => SpellSpriteDimensions(16,16,4,1),	
-		(SpellElement::Neutral, SpellSize::Small) => SpellSpriteDimensions(16,16,4,1),	
-		(SpellElement::Neutral, SpellSize::Normal) => SpellSpriteDimensions(16,16,4,1),	
-		(SpellElement::Neutral, SpellSize::Large) => SpellSpriteDimensions(16,16,4,1),
+		(SpellElement::Neutral, SpellSize::Tiny) => SpellSpriteDimensions(8,8,1,1),	
+		(SpellElement::Neutral, SpellSize::Small) => SpellSpriteDimensions(12,12,2,1),	
+		(SpellElement::Neutral, SpellSize::Normal) => SpellSpriteDimensions(16,16,2,1),	
+		(SpellElement::Neutral, SpellSize::Large) => SpellSpriteDimensions(24,24,2,1),
+		// ////////////////////////////////////////////////
 		(SpellElement::Fire, SpellSize::Tiny) => SpellSpriteDimensions(8,8,4,1),
 		(SpellElement::Fire, SpellSize::Small) => SpellSpriteDimensions(16,16,4,1),
 		(SpellElement::Fire, SpellSize::Normal) => SpellSpriteDimensions(16,24,4,1),
 		(SpellElement::Fire, SpellSize::Large) => SpellSpriteDimensions(16,32,4,1),
-		(SpellElement::Water, SpellSize::Tiny) => SpellSpriteDimensions(16,16,4,1),
-		(SpellElement::Water, SpellSize::Small) => SpellSpriteDimensions(16,16,4,1),
+		// ////////////////////////////////////////////////
+		(SpellElement::Water, SpellSize::Tiny) => SpellSpriteDimensions(8,8,2,1),
+		(SpellElement::Water, SpellSize::Small) => SpellSpriteDimensions(12,12,2,1),
 		(SpellElement::Water, SpellSize::Normal) => SpellSpriteDimensions(16,16,4,1),
-		(SpellElement::Water, SpellSize::Large) => SpellSpriteDimensions(16,16,4,1),
-		(SpellElement::Earth, SpellSize::Tiny) => SpellSpriteDimensions(16,16,4,1),
-		(SpellElement::Earth, SpellSize::Small) => SpellSpriteDimensions(16,16,4,1),
+		(SpellElement::Water, SpellSize::Large) => SpellSpriteDimensions(24,24,4,1),
+		// ////////////////////////////////////////////////
+		(SpellElement::Earth, SpellSize::Tiny) => SpellSpriteDimensions(0,0,4,1),
+		(SpellElement::Earth, SpellSize::Small) => SpellSpriteDimensions(0,0,4,1),
 		(SpellElement::Earth, SpellSize::Normal) => SpellSpriteDimensions(16,16,4,1),
-		(SpellElement::Earth, SpellSize::Large) => SpellSpriteDimensions(16,16,4,1),
-		(SpellElement::Air, SpellSize::Tiny) => SpellSpriteDimensions(16,16,4,1),
-		(SpellElement::Air, SpellSize::Small) => SpellSpriteDimensions(16,16,4,1),
+		(SpellElement::Earth, SpellSize::Large) => SpellSpriteDimensions(0,0,4,1),
+		// ////////////////////////////////////////////////
+		(SpellElement::Air, SpellSize::Tiny) => SpellSpriteDimensions(0,0,4,1),
+		(SpellElement::Air, SpellSize::Small) => SpellSpriteDimensions(0,0,4,1),
 		(SpellElement::Air, SpellSize::Normal) => SpellSpriteDimensions(16,16,4,1),
-		(SpellElement::Air, SpellSize::Large) => SpellSpriteDimensions(16,16,4,1),
-		(SpellElement::Metal, SpellSize::Tiny) => SpellSpriteDimensions(16,16,4,1),
-		(SpellElement::Metal, SpellSize::Small) => SpellSpriteDimensions(16,16,4,1),
+		(SpellElement::Air, SpellSize::Large) => SpellSpriteDimensions(0,0,4,1),
+		// ////////////////////////////////////////////////
+		(SpellElement::Metal, SpellSize::Tiny) => SpellSpriteDimensions(0,0,4,1),
+		(SpellElement::Metal, SpellSize::Small) => SpellSpriteDimensions(0,0,4,1),
 		(SpellElement::Metal, SpellSize::Normal) => SpellSpriteDimensions(16,16,2,1),
-		(SpellElement::Metal, SpellSize::Large) => SpellSpriteDimensions(16,16,4,1),
-		(SpellElement::Plant, SpellSize::Tiny) => SpellSpriteDimensions(16,16,4,1),
-		(SpellElement::Plant, SpellSize::Small) => SpellSpriteDimensions(16,16,4,1),
+		(SpellElement::Metal, SpellSize::Large) => SpellSpriteDimensions(0,0,4,1),
+		// ////////////////////////////////////////////////
+		(SpellElement::Plant, SpellSize::Tiny) => SpellSpriteDimensions(0,0,4,1),
+		(SpellElement::Plant, SpellSize::Small) => SpellSpriteDimensions(0,0,4,1),
 		(SpellElement::Plant, SpellSize::Normal) => SpellSpriteDimensions(20,20,4,1),
-		(SpellElement::Plant, SpellSize::Large) => SpellSpriteDimensions(16,16,4,1),
-		(SpellElement::Electric, SpellSize::Tiny) => SpellSpriteDimensions(16,16,4,1),
-		(SpellElement::Electric, SpellSize::Small) => SpellSpriteDimensions(16,16,4,1),
+		(SpellElement::Plant, SpellSize::Large) => SpellSpriteDimensions(0,0,4,1),
+		// ////////////////////////////////////////////////
+		(SpellElement::Electric, SpellSize::Tiny) => SpellSpriteDimensions(0,0,4,1),
+		(SpellElement::Electric, SpellSize::Small) => SpellSpriteDimensions(0,0,4,1),
 		(SpellElement::Electric, SpellSize::Normal) => SpellSpriteDimensions(16,16,4,1),
-		(SpellElement::Electric, SpellSize::Large) => SpellSpriteDimensions(16,16,4,1),
-		(SpellElement::Ice, SpellSize::Tiny) => SpellSpriteDimensions(16,16,4,1),
-		(SpellElement::Ice, SpellSize::Small) => SpellSpriteDimensions(16,16,4,1),
+		(SpellElement::Electric, SpellSize::Large) => SpellSpriteDimensions(24,24,4,1),
+		// ////////////////////////////////////////////////
+		(SpellElement::Ice, SpellSize::Tiny) => SpellSpriteDimensions(0,0,4,1),
+		(SpellElement::Ice, SpellSize::Small) => SpellSpriteDimensions(0,0,4,1),
 		(SpellElement::Ice, SpellSize::Normal) => SpellSpriteDimensions(16,16,4,1),
-		(SpellElement::Ice, SpellSize::Large) => SpellSpriteDimensions(16,16,4,1),
-		(SpellElement::Light, SpellSize::Tiny) => SpellSpriteDimensions(16,16,4,1),
-		(SpellElement::Light, SpellSize::Small) => SpellSpriteDimensions(16,16,4,1),
+		(SpellElement::Ice, SpellSize::Large) => SpellSpriteDimensions(0,0,4,1),
+		// ////////////////////////////////////////////////
+		(SpellElement::Light, SpellSize::Tiny) => SpellSpriteDimensions(0,0,4,1),
+		(SpellElement::Light, SpellSize::Small) => SpellSpriteDimensions(0,0,4,1),
 		(SpellElement::Light, SpellSize::Normal) => SpellSpriteDimensions(20,20,4,1),
-		(SpellElement::Light, SpellSize::Large) => SpellSpriteDimensions(16,16,4,1),
+		(SpellElement::Light, SpellSize::Large) => SpellSpriteDimensions(0,0,4,1),
 	}
 }
 

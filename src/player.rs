@@ -6,8 +6,11 @@ pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugin(InputManagerPlugin::<Action>::default())
+        app
+			.add_plugin(InputManagerPlugin::<Action>::default())
             .add_startup_system(player_setup)
+			.add_event::<GiveStaffEvent>()
+			.add_system(do_give_staff)
 			.add_system(update_player_state.after(update_spell_casting).before(player_movement))
             .add_system(player_movement.before(physics::update_movement))
             .add_system(update_spell_casting)
@@ -20,6 +23,8 @@ impl Plugin for PlayerPlugin {
 
 #[derive(Component, Debug)]
 pub struct Player;
+#[derive(Component, Debug)]
+pub struct PlayerHasStaff(pub bool);
 #[derive(Component, Debug)]
 pub struct CurrentPlayerState(PlayerState);
 #[derive(Debug, PartialEq, Eq)]
@@ -47,6 +52,34 @@ pub struct PlayerMana {
 	pub max_mana: i32,
 	recharge_rate: f32,
 	recharge_spillover: f32,
+}
+
+// Event for giving the staff
+pub struct GiveStaffEvent;
+
+fn do_give_staff(
+	mut player_query: Query<&mut PlayerHasStaff, With<Player>>,
+	mut player_sprite_query: Query<&mut Handle<TextureAtlas>, With<PlayerSpriteMarker>>,
+	mut staff_events: EventReader<GiveStaffEvent>,
+	sprite_sheets: Res<PlayerSpriteSheets>,
+) {
+	let mut has_staff = player_query.single_mut();
+	let mut texture_atlas = player_sprite_query.single_mut();
+	
+	if has_staff.0 {
+		return;
+	}
+	
+	if !staff_events.iter().next().is_none() {
+		has_staff.0 = true;
+		*texture_atlas = sprite_sheets.with_staff.clone();
+	}
+}
+
+// resource for sprite sheets
+pub struct PlayerSpriteSheets {
+	//no_staff: Handle<TextureAtlas>,
+	with_staff: Handle<TextureAtlas>,
 }
 
 const HEALTH_PER_HEART: i32 = 4;
@@ -87,6 +120,7 @@ fn player_setup(
     commands
         .spawn()
         .insert(Player)
+		.insert(PlayerHasStaff(false))
 		.insert(CurrentPlayerState(PlayerState::Normal))
 		.insert(PlayerVulnerability::new())
 		.insert(PlayerHealth::new(4))
@@ -116,15 +150,24 @@ fn player_setup(
                 })
                 .insert(sprite::SpriteOffset(Vec3::new(0.0, 22.0, 0.0)))
                 .insert_bundle(SpriteSheetBundle {
-                    texture_atlas: player_staff_texture_atlas,
+                    texture_atlas: player_texture_atlas,
                     ..default()
                 });
 			parent.spawn_bundle(shadow_texture.get_shadow_bundle(2));
         });
+		
+	commands.insert_resource(PlayerSpriteSheets {
+		//no_staff: player_texture_atlas,
+		with_staff: player_staff_texture_atlas,
+	});
 }
 
 fn update_player_state(
-    mut query: Query<(&mut CurrentPlayerState, &mut PlayerVulnerability, &spells::RuneCastQueue), With<Player>>,
+    mut query: Query<(
+		&mut CurrentPlayerState, 
+		&mut PlayerVulnerability, 
+		&spells::RuneCastQueue
+	), With<Player>>,
 	time: Res<Time>,
 ) {
 	let (mut player_state, mut player_vulnerability, spell_queue) = query.single_mut();
@@ -567,7 +610,7 @@ fn update_speed(current_speed: f32, target_speed: f32, delta: f32) -> f32 {
 
 // Spellcasting
 pub fn update_spell_casting(
-    mut query: Query<(&Transform, &ActionState<Action>, &CurrentPlayerState, &mut spells::RuneCastQueue, &mut PlayerMana), With<Player>>,
+    mut query: Query<(&Transform, &ActionState<Action>, &CurrentPlayerState, &PlayerHasStaff, &mut spells::RuneCastQueue, &mut PlayerMana), With<Player>>,
     anim_query: Query<&PlayerAnimationState, With<PlayerSpriteMarker>>,
     camera_query: Query<(&Camera, &GlobalTransform)>,
     equipped: Res<spells::EquippedRunes>,
@@ -581,7 +624,12 @@ pub fn update_spell_casting(
         return;
     }
 
-    let (transform, action_state, player_state, mut spell_queue, mut player_mana) = query.single_mut();
+    let (transform, action_state, player_state, has_staff, mut spell_queue, mut player_mana) = query.single_mut();
+	
+	// Don't do anything if we don't have the staff yet
+	if !has_staff.0 {
+		return;
+	}
 
 	if player_state.0 == PlayerState::Knockback {
 		spell_queue.clear();
@@ -608,7 +656,7 @@ pub fn update_spell_casting(
 				player_mana.recharge_rate += spell_data.get_mana_cost() as f32;
 			
 				// Figure out where the mouse is pointing
-				let offset = Vec3::new(0.0, 16.0, 0.0);
+				let offset = Vec3::new(0.0, 32.0, 0.0);
 				let (camera, camera_transform) = camera_query.single();
 				let anim_state = anim_query.single();
 
@@ -636,7 +684,7 @@ pub fn update_spell_casting(
 					},
 				};
 				
-				let start_pos = collapse_vec3(transform.translation) + 12.0 * aim_dir;
+				let start_pos = collapse_vec3(transform.translation) + 24.0 * aim_dir;
 				
 				create_spell_events.send(spells::CreateSpellEvent {
 					spell_data,

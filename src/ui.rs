@@ -398,7 +398,7 @@ pub struct MessageEvent {
 pub enum MessageSource {
 	None,
 	ForceClear,
-	Tutorial0,
+	Tutorial,
 }
 
 #[derive(Component)]
@@ -523,6 +523,10 @@ pub struct MessageTrigger {
 pub enum MessageTriggerType {
 	OnTimer(Timer),
 	OnSpellUi(bool),
+	OnMove,
+	OnCollectStaff,
+	OnRuneEqipped,
+	OnSpellCast,
 }
 
 fn do_message_triggers(
@@ -532,7 +536,12 @@ fn do_message_triggers(
 	// Needs a bunch of random arguments to be able to check all of the triggers
 	time: Res<Time>,
     spell_ui_active: Res<SpellUiActive>,
+	player_query: Query<(&ActionState<player::Action>, &player::PlayerHasStaff), With<player::Player>>,
+	spell_query: Query<(), With<spells::SpellMarker>>,
+	equipped_runes: Res<spells::EquippedRunes>,
 ) {
+	let (action_state, has_staff) = player_query.single();
+	
 	for (e, mut trigger) in query.iter_mut() {
 		let is_activated = match &mut trigger.trigger_type {
 			MessageTriggerType::OnTimer(ref mut timer) => {
@@ -541,6 +550,27 @@ fn do_message_triggers(
 			},
 			MessageTriggerType::OnSpellUi(open) => {
 				*open == spell_ui_active.0
+			},
+			MessageTriggerType::OnMove => {
+				action_state.just_pressed(player::Action::Left)
+				|| action_state.just_pressed(player::Action::Right)
+				|| action_state.just_pressed(player::Action::Up)
+				|| action_state.just_pressed(player::Action::Down)
+			},
+			MessageTriggerType::OnCollectStaff => {
+				has_staff.0
+			},
+			MessageTriggerType::OnRuneEqipped => {
+				equipped_runes.0.iter().any(|maybe_rune| {
+					if let Some(spells::Rune::ElementRune(_)) = maybe_rune {
+						true
+					} else {
+						false
+					}
+				})
+			},
+			MessageTriggerType::OnSpellCast => {
+				!spell_query.is_empty()
 			}
 		};
 		if is_activated {

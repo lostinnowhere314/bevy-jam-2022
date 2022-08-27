@@ -39,32 +39,11 @@ fn main() {
         .add_plugin(physics::GeneralPhysicsPlugin)
 		.add_plugin(enemy::EnemyPlugin)
         .add_plugin(ui::UIPlugin)
+		.add_plugin(levels::LevelsPlugin)
         .add_startup_system(setup)
-		// TODO debug
-		.add_startup_system(test_setup)
         //.add_plugin(LogDiagnosticsPlugin::default())
         //.add_plugin(FrameTimeDiagnosticsPlugin::default())
         .run();
-}
-
-use ui::{MessageTrigger, MessageEvent, MessageSource, MessageTriggerType};
-
-fn test_setup(mut commands: Commands) {
-	commands.spawn().insert(MessageTrigger {
-			message_event: MessageEvent {
-				message: Some("Good job, you opened the inventory".to_string()),
-				source: MessageSource::Tutorial0
-			},
-			trigger_type: MessageTriggerType::OnSpellUi(true),
-			next_message: Some(Box::new(MessageTrigger {
-				message_event: MessageEvent {
-					message: None,
-					source: MessageSource::Tutorial0
-				},
-				trigger_type: MessageTriggerType::OnTimer(Timer::from_seconds(4.0, false)),
-				next_message: None
-			}))
-		});
 }
 
 fn setup(mut commands: Commands) {
