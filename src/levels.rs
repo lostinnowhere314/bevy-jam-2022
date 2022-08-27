@@ -263,6 +263,7 @@ fn transition_to_room(
 				commands.spawn()
 					.insert(GateMarker)
 					.insert_bundle(at_location(0.0, -50.0))
+					.insert_bundle(Wall::new(Vec2::new(-32.0,0.0), Vec2::new(32.0,0.0), true))
 					.insert(CleanUpOnRoomLoad)
 					.with_children(|parent| {
 						parent.spawn_bundle(FacingSpriteBundle::new(

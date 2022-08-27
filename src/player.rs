@@ -659,7 +659,7 @@ pub fn update_spell_casting(
 				player_mana.recharge_rate += spell_data.get_mana_cost() as f32;
 			
 				// Figure out where the mouse is pointing
-				let offset = Vec3::new(0.0, 32.0, 0.0);
+				let offset = Vec3::new(0.0, 16.0, 0.0);
 				let (camera, camera_transform) = camera_query.single();
 				let anim_state = anim_query.single();
 
