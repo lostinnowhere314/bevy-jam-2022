@@ -14,6 +14,7 @@ impl Plugin for GeneralPhysicsPlugin {
         app
 			.add_system(update_movement)
 			.add_system(do_takes_space_collisions.after(update_movement))
+			.add_system(do_wall_collisions.after(do_takes_space_collisions))
 			.add_plugin(CollisionPlugin::<WallCollidable>::default())
 			.add_plugin(CollisionPlugin::<InteractsWithPlayer>::default())
 			.add_plugin(CollisionPlugin::<InteractsWithEnemies>::default())
@@ -35,7 +36,65 @@ pub struct InteractsWithEnemies;
 pub struct TakesSpace;
 
 // Walls and TakesSpace collisions
-// TODO walls
+#[derive(Bundle)]
+pub struct Wall {
+	collision: CollisionSource<WallCollidable>,
+	in_direction: WallInsideDirection
+}
+// Normal vector of the wall
+#[derive(Component)]
+struct WallInsideDirection(Vec2);
+impl Wall {
+	pub fn new(point1: Vec2, point2: Vec2, rhs_inside: bool) -> Self {
+		let wall_tangent = (point2 - point1).try_normalize().expect("degenerate wall attempted to be created");
+		
+		let wall_normal = wall_tangent.perp() * (if rhs_inside {
+			1.0
+		} else {
+			-1.0
+		});
+		
+		Self {
+			collision: CollisionSource::<WallCollidable>::new(Collider::LineSegment(
+				point1,
+				point2
+			)),
+			in_direction: WallInsideDirection(wall_normal)
+		}
+	}
+}
+
+fn do_wall_collisions (
+	wall_query: Query<(&Transform, &WallInsideDirection), Without<CollisionRecipient<WallCollidable>>>,
+	mut recip_query: Query<&mut Transform, With<CollisionRecipient<WallCollidable>>>,
+	collisions: Res<ActiveCollisions<WallCollidable>>
+) {
+	for collision in collisions.iter() {
+		// Get collidees from queries
+		if let (Ok((wall_transform, wall)), Ok(mut other_transform)) = (
+			wall_query.get(collision.source_entity),
+			recip_query.get_mut(collision.recip_entity),
+		) {
+			// Get transformed collider; recipient must be a circle, source is always LineSegment
+			if let (
+				Collider::Circle {center: real_center, radius},
+				Collider::LineSegment(point1, _point2)
+			) = (
+				collision.recip_collider.with_transform(&other_transform),
+				collision.source_collider.with_transform(&wall_transform),
+			) {
+				// Check the current projected distance
+				let recip_rel_pos = real_center - point1;
+				let dist = wall.0.dot(recip_rel_pos);
+				if dist < radius {
+					other_transform.translation += expand_vec2(wall.0 * (radius - dist));
+				}
+			} else {
+				panic!("invalid WallCollidable recipient Collider; must be Collider::Circle");
+			}
+		}
+	}
+}
 
 
 fn do_takes_space_collisions(
