@@ -1,5 +1,8 @@
 use super::{physics, spells, sprite, ui, enemy, collapse_vec3};
-use bevy::prelude::*;
+use bevy::{
+	prelude::*,
+	render::camera::ScalingMode
+};
 use leafwing_input_manager::prelude::*;
 
 pub struct PlayerPlugin;
@@ -8,16 +11,18 @@ impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app
 			.add_plugin(InputManagerPlugin::<Action>::default())
-            .add_startup_system(player_setup)
 			.add_event::<GiveStaffEvent>()
+            .add_startup_system(player_setup)
+			.add_startup_system(camera_setup)
 			.add_system(do_give_staff)
+			.add_system(flicker_if_intangible)
+            .add_system(update_spell_casting)
 			.add_system(update_player_state.after(update_spell_casting).before(player_movement))
             .add_system(player_movement.before(physics::update_movement))
-            .add_system(update_spell_casting)
 			.add_system(update_take_damage.before(update_spell_casting).before(player_movement).before(update_player_state))
 			.add_system(regen_player_mana.before(update_spell_casting))
-			.add_system(flicker_if_intangible)
-            .add_system(update_player_animation.after(player_movement).after(update_player_state));
+            .add_system(update_player_animation.after(player_movement).after(update_player_state))
+			.add_system_to_stage(CoreStage::PostUpdate, update_camera.before(sprite::facing_sprite_update));
     }
 }
 
@@ -641,8 +646,6 @@ pub fn update_spell_casting(
         if action_state.just_pressed(*comp_action) {
             if let Some(Some(rune)) = equipped.0.get(idx as usize) {
                 spell_queue.push(*rune);
-            } else {
-                println!("No component available to add")
             }
         }
     }
@@ -753,3 +756,53 @@ pub const SPELL_COMP_ACTIONS: [Action; 5] = [
     Action::SpellComp3,
     Action::SpellComp4,
 ];
+
+// Camera handling
+pub struct CameraBounds {
+	pub min_x: f32,
+	pub max_x: f32,
+}
+
+fn camera_setup(mut commands: Commands) {
+    let orthographic_projection = OrthographicProjection {
+        scale: 0.5,
+        scaling_mode: ScalingMode::Auto {
+            min_width: 640.0,
+            min_height: 400.0,
+        },
+        ..default()
+    };
+
+    commands.spawn_bundle(Camera2dBundle {
+        projection: orthographic_projection,
+        transform: Transform::from_xyz(0.0, 100., 200.0).looking_at(Vec3::new(0., 0., 0.), Vec3::Y),
+        ..default()
+    });
+	
+	commands.insert_resource(CameraBounds {
+		min_x: 0.0,
+		max_x: 100.0
+	});
+}
+
+fn update_camera (
+	mut camera_query: Query<&mut Transform, (With<Camera>, Without<Player>)>,
+	player_query: Query<&Transform, (With<Player>, Without<Camera>)>,
+	camera_bounds: Res<CameraBounds>,
+    spell_ui_active: Res<ui::SpellUiActive>,
+) {
+	if spell_ui_active.0 {
+		return;
+	}
+	
+	let mut camera_transform = camera_query.single_mut();
+	let player_x = player_query.single().translation.x;
+	
+	let new_camera_x = match player_x {
+		x if x < camera_bounds.min_x => camera_bounds.min_x,
+		x if x > camera_bounds.max_x => camera_bounds.max_x,
+		x => x
+	};
+	
+	camera_transform.translation.x = new_camera_x;
+}

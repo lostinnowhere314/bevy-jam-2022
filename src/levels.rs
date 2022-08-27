@@ -1,15 +1,20 @@
 
-use bevy::prelude::*;
+use bevy::{
+	prelude::*,
+	utils::HashMap
+};
 use bevy_turborand::*;
-use super::{enemy, sprite, physics, player, ui};
+use super::{enemy, sprite, spells, physics, player, ui, expand_vec2};
 
 pub struct LevelsPlugin;
 impl Plugin for LevelsPlugin {
 	fn build(&self, app: &mut App) {
 		app
 			.insert_resource(CurrentRoom(None))
+			.add_startup_system(load_level_sprites)
 			.add_event::<RoomTransitionEvent>()
 			.add_system(transition_to_room)
+			.add_system(update_gate)
 			.add_system(do_player_interaction);
 	}
 }
@@ -59,10 +64,60 @@ fn do_player_interaction(
 	}
 }
 
+// Gate that opens if there are no enemies
+#[derive(Component)]
+pub struct GateMarker;
+
+fn update_gate(
+	mut commands: Commands,
+	gate_query: Query<Entity, With<GateMarker>>,
+	enemy_query: Query<(), With<enemy::EnemyMarker>>,
+) {
+	if enemy_query.is_empty() {
+		for e in gate_query.iter() {
+			commands.entity(e).despawn_recursive();
+		}
+	}
+}
+
+
+#[derive(Deref, DerefMut)]
+pub struct LevelSprites(pub HashMap<String, Handle<Image>>);
+impl LevelSprites {
+	pub fn get_sprite(&self, key: &str) -> Handle<Image> {
+		self.0.get(&key.to_string()).expect("invalid enemy sprite key encountered").clone()
+	}
+}
+fn load_level_sprites(
+	mut commands: Commands,
+	asset_server: Res<AssetServer>,
+) {
+	let handles = [
+		("gate", "level/gate.png"),
+	].iter()
+		.map(|(key, path)| {
+			(key.to_string(), asset_server.load(*path))
+		})
+		.collect();
+	
+	commands.insert_resource(LevelSprites(handles));
+}
+
 use ui::{MessageTrigger, MessageEvent, MessageSource, MessageTriggerType};
 use sprite::*;
 use enemy::*;
 use physics::*;
+use spells::*;
+
+fn at_location(x: f32, y: f32) -> SpatialBundle {
+	at_location_vec(Vec2::new(x,y))
+}
+fn at_location_vec(loc: Vec2) -> SpatialBundle {
+	SpatialBundle {
+		transform: Transform::from_translation(expand_vec2(loc)),
+		..default()
+	}
+}
 
 // Transition function.
 // Soon will be absolutely atrociously long.
@@ -75,8 +130,10 @@ fn transition_to_room(
 	// Things needed to spawn the destination room
 	mut message_events: EventWriter<MessageEvent>,
 	mut global_rng: ResMut<GlobalRng>,
-	enemy_textures: Res<enemy::EnemySprites>,
-	shadow_texture: Res<sprite::ShadowTexture>
+	level_textures: Res<LevelSprites>,
+	enemy_textures: Res<EnemySprites>,
+	shadow_texture: Res<ShadowTexture>,
+	spell_textures: Res<AllSpellSprites>,
 ) {
 	let maybe_transition_event = if current_room.0.is_none() {
 		// Go to room 0 at the start
@@ -97,7 +154,7 @@ fn transition_to_room(
 		// Figure out room index
 		let (room_index, respawn) = match &transition_event.0 {
 			DestinationRoom::NextRoom => if let Some(index) = current_room.0 {
-				(index, false)
+				(index + 1, false)
 			} else {
 				panic!("cannot transition to next room if not in a room")
 			},
@@ -111,10 +168,12 @@ fn transition_to_room(
 		});
 		
 		// Do spawning
+		// TIP: Alt+5 does a good code folding level for this to actually be readable
 		// What kind of things might we want to return from this match statement?
 		// - Camera boundaries (x1, x2)
 		// - Player start position (x,y)
 		// - Camera start position (x) 
+		// - screen clear color
 		match room_index {
 			0 => {
 				// starting room
@@ -125,10 +184,7 @@ fn transition_to_room(
 						radius: 12.0,
 					}))
 					.insert(PlayerInteraction::GiveStaff)
-					.insert_bundle(SpatialBundle {
-						transform: Transform::from_translation(Vec3::new(100.0, 0.0, 0.0)),
-						..default()
-					})
+					.insert_bundle(at_location(100.0,0.0))
 					.with_children(|parent| {
 						parent.spawn_bundle(FacingSpriteBundle::new(
 							asset_server.load("player/staff.png"),
@@ -141,7 +197,7 @@ fn transition_to_room(
 					message: Some("You begin your quest to reach the Tower of the Moon.\nUse WASD to walk.".to_string()),
 					source: MessageSource::Tutorial,
 				});
-				// sorry this is mildly atrocious but I didn't want it wandering five tabs to the right
+				// (sorry this is mildly atrocious but I didn't want it wandering five tabs to the right)
 				commands.spawn().insert(MessageTrigger {
 					message_event: MessageEvent {
 						message: Some("Walk to the right and pick up your staff.".to_string()),
@@ -183,13 +239,86 @@ fn transition_to_room(
 						source: MessageSource::Tutorial,
 					},
 					trigger_type: MessageTriggerType::OnSpellCast,
+					next_message: Some(Box::new(MessageTrigger {
+					///////////////////////////////////////////////////////////////////////
+					message_event: MessageEvent {
+						message:  Some("Enter the gate to proceed to the next area.".to_string()),
+						source: MessageSource::Tutorial,
+					},
+					trigger_type: MessageTriggerType::OnGateOpened,
 					next_message: None
 					}))
 					}))
 					}))
 					}))
 					}))
+					}))
 				});
+				
+				// Gate
+				commands.spawn()
+					.insert(GateMarker)
+					.insert_bundle(at_location(0.0, -50.0))
+					.insert(CleanUpOnRoomLoad)
+					.with_children(|parent| {
+						parent.spawn_bundle(FacingSpriteBundle::new(
+							level_textures.get_sprite("gate"),
+							32.0
+						));
+					});
+				
+				// "enemies"
+				commands
+					.spawn_bundle(EnemyBundle::<NoAI>::with_state(
+						NoAI,
+						1, 
+						1, 
+						0.0,
+						Collider::Circle {
+							center: Vec2::ZERO,
+							radius: 8.0
+						}, 
+						at_location(-32.0,-40.0),
+						&mut global_rng
+					)).with_children(|parent| {
+						parent.spawn_bundle(SimpleAnimationBundle::new(
+							spell_textures.get_atlas_from_type(SpellElement::Fire, SpellSize::Large), 
+							20.0,
+							false
+						));
+						parent.spawn_bundle(shadow_texture.get_shadow_bundle(2));
+					});
+				commands
+					.spawn_bundle(EnemyBundle::<NoAI>::with_state(
+						NoAI,
+						1, 
+						1, 
+						0.0,
+						Collider::Circle {
+							center: Vec2::ZERO,
+							radius: 8.0
+						}, 
+						at_location(32.0,-40.0),
+						&mut global_rng
+					)).with_children(|parent| {
+						parent.spawn_bundle(SimpleAnimationBundle::new(
+							spell_textures.get_atlas_from_type(SpellElement::Fire, SpellSize::Large), 
+							20.0,
+							false
+						));
+						parent.spawn_bundle(shadow_texture.get_shadow_bundle(2));
+					});
+				
+				// TODO Testing thing for room transitions
+				commands.spawn()
+					.insert(CollisionSource::<InteractsWithPlayer>::new(Collider::Circle {
+						center: Vec2::ZERO,
+						radius: 12.0,
+					}))
+					.insert(PlayerInteraction::RoomTransition)
+					.insert(CleanUpOnRoomLoad)
+					.insert_bundle(at_location(0.0,-72.0));
+				
 			}
 			1 => {
 				// testing-ish
@@ -201,10 +330,7 @@ fn transition_to_room(
 							center: Vec2::ZERO,
 							radius: 8.0
 						}, 
-						SpatialBundle {
-							transform: Transform::from_translation(Vec3::new(60.0, 0.0, 0.0)),
-							..default()
-						},
+						at_location(60.0,0.0),
 						&mut global_rng
 					)).with_children(|parent| {
 						parent.spawn_bundle(SimpleAnimationBundle::new(

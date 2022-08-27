@@ -1,4 +1,4 @@
-use super::{player, spells};
+use super::{player, spells, levels};
 use bevy::{math::Vec4Swizzles, prelude::*, utils::HashMap};
 use leafwing_input_manager::prelude::*;
 
@@ -527,6 +527,7 @@ pub enum MessageTriggerType {
 	OnCollectStaff,
 	OnRuneEqipped,
 	OnSpellCast,
+	OnGateOpened,
 }
 
 fn do_message_triggers(
@@ -538,6 +539,7 @@ fn do_message_triggers(
     spell_ui_active: Res<SpellUiActive>,
 	player_query: Query<(&ActionState<player::Action>, &player::PlayerHasStaff), With<player::Player>>,
 	spell_query: Query<(), With<spells::SpellMarker>>,
+	gate_query: Query<(), With<levels::GateMarker>>,
 	equipped_runes: Res<spells::EquippedRunes>,
 ) {
 	let (action_state, has_staff) = player_query.single();
@@ -571,7 +573,10 @@ fn do_message_triggers(
 			},
 			MessageTriggerType::OnSpellCast => {
 				!spell_query.is_empty()
-			}
+			},
+			MessageTriggerType::OnGateOpened => {
+				!gate_query.is_empty()
+			},
 		};
 		if is_activated {
 			// Send message event

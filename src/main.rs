@@ -7,7 +7,7 @@
 
 use bevy::{
     prelude::*,
-    render::{camera::ScalingMode, texture::ImageSettings},
+    render::texture::ImageSettings,
 	//diagnostic::{LogDiagnosticsPlugin, FrameTimeDiagnosticsPlugin},
 };
 use bevy_turborand::*;
@@ -40,28 +40,11 @@ fn main() {
 		.add_plugin(enemy::EnemyPlugin)
         .add_plugin(ui::UIPlugin)
 		.add_plugin(levels::LevelsPlugin)
-        .add_startup_system(setup)
         //.add_plugin(LogDiagnosticsPlugin::default())
         //.add_plugin(FrameTimeDiagnosticsPlugin::default())
         .run();
 }
 
-fn setup(mut commands: Commands) {
-    let orthographic_projection = OrthographicProjection {
-        scale: 0.5,
-        scaling_mode: ScalingMode::Auto {
-            min_width: 640.0,
-            min_height: 400.0,
-        },
-        ..default()
-    };
-
-    commands.spawn_bundle(Camera2dBundle {
-        projection: orthographic_projection,
-        transform: Transform::from_xyz(0.0, 100., 200.0).looking_at(Vec3::new(0., 0., 0.), Vec3::Y),
-        ..default()
-    });
-}
 
 // Utility functions for converting between actual space and the space that we're pretending everything
 // lives in for physics

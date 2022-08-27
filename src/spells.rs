@@ -474,7 +474,7 @@ impl SpellShape {
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-enum SpellSize {
+pub enum SpellSize {
     Tiny,
     Small,
     Normal,
@@ -524,15 +524,12 @@ pub fn process_spell_enemy_collisions(
 		) = (
 			spell_query.get(collision.source_entity), enemy_query.get_mut(collision.recip_entity)
 		) {
-			println!("Collided with an enemy! :)");
 			// Do damage
 			if spell_data.get_damage() > 0 {
 				enemy_health.0 -= spell_data.get_damage();
 			}
 			// Apply knockback
 			enemy_knockback.0 = speed.normalize_or_zero() * spell_data.knockback;
-			
-			println!("{:?}", enemy_health);
 			
 			if let Some(new_spell_data) = &spell_data.on_collide {
 				create_spell_events.send(CreateSpellEvent {
@@ -671,6 +668,10 @@ impl AllSpellSprites {
     fn get(&self, spell_data: &SpellData) -> Option<&SpellSpriteData> {
         self.0.get(&(spell_data.element, spell_data.size))
     }
+	
+	pub fn get_atlas_from_type(&self, element: SpellElement, size: SpellSize) -> Handle<TextureAtlas> {
+		self.0.get(&(element, size)).expect("invalid spell sprite requested").texture_atlas.clone()
+	}
 }
 
 /// Load spell rune sprites (dealt with in ui.rs)

@@ -67,7 +67,7 @@ fn shadow_setup(
 }
 
 // Make sprites look nice in our sort-of-3d environment
-fn facing_sprite_update(
+pub fn facing_sprite_update(
     parent_query: Query<&Transform, (Without<FacingSpriteMarker>, Without<Camera>)>,
     mut sprite_query: Query<
         (&mut Transform, &Parent, Option<&SpriteOffset>),

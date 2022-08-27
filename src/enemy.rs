@@ -20,6 +20,7 @@ impl Plugin for EnemyPlugin {
 					.before(physics::update_movement)
 					.after(spells::process_spell_enemy_collisions)
 			)
+			.add_system(do_enemy_ai::<NoAI>.before(knockback_post_update))
 			.add_system(do_enemy_ai::<AIPeriodicCharge>.before(knockback_post_update))
 			.add_system(clean_dead_enemies);
 	}	
@@ -37,8 +38,11 @@ pub trait EnemyAIState: Component+Default {
 	);
 }
 
+#[derive(Component)]
+pub struct EnemyMarker;
 #[derive(Bundle)]
 pub struct EnemyBundle<T: EnemyAIState> {
+	marker: EnemyMarker,
 	ai_state: T,
 	ai_data: AIGeneralState,
 	health: EnemyHealth,
@@ -67,6 +71,7 @@ impl<T: EnemyAIState> EnemyBundle<T> {
 			T::default(),
 			max_health, 
 			contact_damage,
+			1.0,
 			collider, 
 			spatial, 
 			global_rng,
@@ -76,11 +81,13 @@ impl<T: EnemyAIState> EnemyBundle<T> {
 		ai_state: T,
 		max_health: i32, 
 		contact_damage: i32,
+		knockback_factor: f32,
 		collider: physics::Collider, 
 		spatial: SpatialBundle, 
 		global_rng: &mut GlobalRng,
 	) -> Self {
 		EnemyBundle {
+			marker: EnemyMarker,
 			ai_state,
 			ai_data: AIGeneralState {
 				has_noticed_player: false,
@@ -95,7 +102,7 @@ impl<T: EnemyAIState> EnemyBundle<T> {
 			wall_collider: physics::CollisionRecipient::<physics::WallCollidable>::new(collider),
 			spatial,
 			rng: RngComponent::with_seed(global_rng.u64(0..=u64::MAX)),
-			knockback: EnemyKnockbackComponent::new(),
+			knockback: EnemyKnockbackComponent(Vec2::ZERO, knockback_factor),
 			cleanup: levels::CleanUpOnRoomLoad,
 		}
 	}
@@ -108,11 +115,11 @@ pub struct DamagePlayerComponent(pub i32);
 
 // Knockback handling ////////////////////////////////
 #[derive(Debug, Component)]
-pub struct EnemyKnockbackComponent(pub Vec2);
+pub struct EnemyKnockbackComponent(pub Vec2, f32);
 
 impl EnemyKnockbackComponent {
 	fn new() -> Self {
-		Self(Vec2::ZERO)
+		Self(Vec2::ZERO, 1.0)
 	}
 }
 
@@ -131,7 +138,7 @@ fn knockback_pre_update(
 	for (mut knockback, mut speed) in query.iter_mut() {
 		knockback.0 *= decay_factor;
 		
-		speed.0 -= knockback.0;
+		speed.0 -= knockback.0 * knockback.1;
 	}
 }
 
@@ -143,7 +150,7 @@ fn knockback_post_update(
 		return;
 	}
 	for (knockback, mut speed) in query.iter_mut() {
-		speed.0 += knockback.0;
+		speed.0 += knockback.0 * knockback.1;
 	}
 }
 
@@ -212,6 +219,24 @@ fn clean_dead_enemies(
 }
 
 // AI types //////////////////////////////////////////////////
+
+#[derive(Component, Default)]
+pub struct NoAI;
+
+impl EnemyAIState for NoAI {
+	fn update(
+		&mut self,
+		_general_state: &AIGeneralState, 
+		_speed: &mut physics::Speed, 
+		_own_pos: &mut Transform,
+		_player_pos: Vec2,
+		_time_delta: Duration,
+		_rng: &mut RngComponent,
+	) {
+		()
+	}
+}
+
 
 #[derive(Component)]
 pub struct AIPeriodicCharge {
