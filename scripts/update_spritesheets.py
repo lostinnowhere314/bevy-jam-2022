@@ -78,6 +78,7 @@ if __name__ == '__main__':
     items = [
         ('player.pdn', 'player/player.png'),
         ('player-staff.pdn', 'player/player-staff.png'),
+        ('spiky-enemy.pdn', 'enemies/spiky-enemy.png'),
     ]
     
     for source, dest in items:
