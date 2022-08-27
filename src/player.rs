@@ -1,4 +1,4 @@
-use super::{physics, spells, sprite, ui, collapse_vec3};
+use super::{physics, spells, sprite, ui, enemy, collapse_vec3};
 use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
 
@@ -11,7 +11,9 @@ impl Plugin for PlayerPlugin {
 			.add_system(update_player_state.after(update_spell_casting).before(player_movement))
             .add_system(player_movement.before(physics::update_movement))
             .add_system(update_spell_casting)
+			.add_system(update_take_damage.before(update_spell_casting).before(player_movement).before(update_player_state))
 			.add_system(regen_player_mana.before(update_spell_casting))
+			.add_system(flicker_if_intangible)
             .add_system(update_player_animation.after(player_movement).after(update_player_state));
     }
 }
@@ -32,7 +34,8 @@ pub struct PlayerSpriteMarker;
 pub struct PlayerVulnerability {
 	tangible: bool,
 	hit_timer: Timer,
-} // TODO add a system to update. Also add a timer somewhere that properly tracks knockback time
+	knockback_timer: Timer,
+}
 #[derive(Component, Debug)]
 pub struct PlayerHealth {
 	pub health: i32,
@@ -50,6 +53,7 @@ const HEALTH_PER_HEART: i32 = 4;
 const MANA_PER_ORB: i32 = 20;
 const BASE_MANA_REGEN: f32 = 5.0;
 const MANA_REGEN_DEFACTOR: f32 = 10.0;
+const PLAYER_KNOCKBACK_SPEED: f32 = 50.0;
 
 fn player_setup(
     mut commands: Commands,
@@ -121,9 +125,14 @@ fn player_setup(
 
 fn update_player_state(
     mut query: Query<(&mut CurrentPlayerState, &mut PlayerVulnerability, &spells::RuneCastQueue), With<Player>>,
+	time: Res<Time>,
 ) {
-	let (mut player_state, player_vulnerable, spell_queue) = query.single_mut();
+	let (mut player_state, mut player_vulnerability, spell_queue) = query.single_mut();
 	
+	player_vulnerability.hit_timer.tick(time.delta());
+	player_vulnerability.knockback_timer.tick(time.delta());
+	
+	// Update state
 	player_state.0 = match player_state.0 {
 		PlayerState::Normal | PlayerState::Casting => {
 			if spell_queue.is_empty() {
@@ -133,16 +142,45 @@ fn update_player_state(
 			}
 		}
 		PlayerState::Knockback => {
-			//TODO use a timer
-			PlayerState::Normal
+			if player_vulnerability.knockback_timer.finished() {
+				PlayerState::Normal
+			} else {
+				PlayerState::Knockback
+			}
 		}
 	};
+	// Update vulnerability
+	if player_vulnerability.hit_timer.finished() {
+		player_vulnerability.tangible = true;
+	}
+}
+
+const FLICKER_TIME: f32 = 0.1;
+fn flicker_if_intangible(
+	mut query: Query<(&mut Visibility, &PlayerVulnerability), With<Player>>,
+	time: Res<Time>,
+    spell_ui_active: Res<ui::SpellUiActive>,
+) {
+	if spell_ui_active.0 {
+		return;
+	}
+	
+	let (mut visibility, vulnerability) = query.single_mut();
+	let current_time = time.time_since_startup().as_secs_f32();
+	
+	visibility.is_visible = vulnerability.tangible 
+		|| (current_time % (2.0 * FLICKER_TIME)) < FLICKER_TIME;
 }
 
 fn regen_player_mana(
 	mut query: Query<&mut PlayerMana, With<Player>>,
 	time: Res<Time>,
+    spell_ui_active: Res<ui::SpellUiActive>,
 ) {
+	if spell_ui_active.0 {
+		return;
+	}
+	
 	let mut player_mana = query.single_mut();
 	
 	if player_mana.mana == player_mana.max_mana {
@@ -237,6 +275,59 @@ impl PlayerVulnerability {
 		Self {
 			tangible: true,
 			hit_timer: Timer::from_seconds(1.0, false),
+			knockback_timer: Timer::from_seconds(0.5, false),
+		}
+	}
+}
+
+fn update_take_damage(
+	mut player_query: Query<(
+		&mut CurrentPlayerState, 
+		&mut PlayerHealth, 
+		&mut PlayerVulnerability, 
+		&mut physics::Speed, 
+		&Transform
+	), With<Player>>,
+	damage_query: Query<(&enemy::DamagePlayerComponent, &Transform)>,
+	collisions: Res<physics::ActiveCollisions<physics::DamagesPlayer>>,
+    spell_ui_active: Res<ui::SpellUiActive>,
+) {
+	if spell_ui_active.0 {
+		return;
+	}
+	
+	let (mut current_state, mut player_health, mut player_vulnerability, mut speed, player_transform) = player_query.single_mut();
+	// Only process if tangible
+	if !player_vulnerability.tangible {
+		return;
+	}
+	
+	for collision in collisions.iter() {
+		if let Ok((damage_component, enemy_transform)) = damage_query.get(collision.source_entity) {
+			if damage_component.0 <= 0 {
+				continue;
+			}
+			
+			// take damage
+			player_health.health -= damage_component.0;
+			
+			// knockback
+			current_state.0 = PlayerState::Knockback;
+			let pos_difference = collapse_vec3(player_transform.translation - enemy_transform.translation);
+			
+			let knockback_direction = match pos_difference.try_normalize() {
+				Some(d) => d,
+				None => Vec2::X,
+			};
+			speed.0 = knockback_direction * PLAYER_KNOCKBACK_SPEED;
+			
+			// intangibility
+			player_vulnerability.tangible = false;
+			player_vulnerability.hit_timer.reset();
+			player_vulnerability.knockback_timer.reset();
+			
+			// only get hit once
+			return;
 		}
 	}
 }

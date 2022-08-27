@@ -43,6 +43,7 @@ pub struct EnemyBundle<T: EnemyAIState> {
 	ai_state: T,
 	ai_data: AIGeneralState,
 	health: EnemyHealth,
+	collide_damage: DamagePlayerComponent,
 	speed: physics::Speed,
 	own_damage_collider: physics::CollisionRecipient<physics::DamagesEnemies>,
 	player_damage_collider: physics::CollisionSource<physics::DamagesPlayer>,
@@ -57,6 +58,7 @@ pub struct EnemyBundle<T: EnemyAIState> {
 impl<T: EnemyAIState> EnemyBundle<T> {
 	pub fn new(
 		max_health: i32, 
+		contact_damage: i32,
 		collider: physics::Collider, 
 		spatial: SpatialBundle, 
 		global_rng: &mut GlobalRng,
@@ -64,6 +66,7 @@ impl<T: EnemyAIState> EnemyBundle<T> {
 		EnemyBundle::<T>::with_state(
 			T::default(),
 			max_health, 
+			contact_damage,
 			collider, 
 			spatial, 
 			global_rng,
@@ -72,6 +75,7 @@ impl<T: EnemyAIState> EnemyBundle<T> {
 	pub fn with_state(
 		ai_state: T,
 		max_health: i32, 
+		contact_damage: i32,
 		collider: physics::Collider, 
 		spatial: SpatialBundle, 
 		global_rng: &mut GlobalRng,
@@ -83,6 +87,7 @@ impl<T: EnemyAIState> EnemyBundle<T> {
 				view_radius: 200.0,
 			},
 			health: EnemyHealth(max_health),
+			collide_damage: DamagePlayerComponent(contact_damage),
 			speed: physics::Speed(Vec2::ZERO),
 			own_damage_collider: physics::CollisionRecipient::<physics::DamagesEnemies>::new(collider.clone()),
 			player_damage_collider: physics::CollisionSource::<physics::DamagesPlayer>::new(collider.clone()),
@@ -94,6 +99,11 @@ impl<T: EnemyAIState> EnemyBundle<T> {
 		}
 	}
 }
+
+// Player contact damage /////////////////////////////
+#[derive(Component)]
+pub struct DamagePlayerComponent(pub i32);
+
 
 // Knockback handling ////////////////////////////////
 #[derive(Debug, Component)]
@@ -284,6 +294,7 @@ fn enemy_test_system(
 	commands
 		.spawn_bundle(EnemyBundle::<AIPeriodicCharge>::new(
 			100, 
+			2, 
 			physics::Collider::Circle {
 				center: Vec2::ZERO,
 				radius: 8.0
