@@ -2,3 +2,4 @@
 /assets-dev/layers
 /wasm
 wasm-build.zip
+Cargo.lock
