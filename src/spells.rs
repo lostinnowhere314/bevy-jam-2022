@@ -2,6 +2,9 @@ use super::{physics, sprite, ui, enemy, expand_vec2, collapse_vec3};
 use bevy::{prelude::*, utils::HashMap};
 use bevy_turborand::*;
 
+const SPELL_RUNE_COST: f32 = 8.0;
+const SPELL_BASE_DAMAGE: f32 = 5.0;
+
 pub struct SpellPlugin;
 
 impl Plugin for SpellPlugin {
@@ -121,7 +124,7 @@ fn create_spell_recursive(runes: &[Rune], power_factor: f32) -> Option<SpellData
 		_ => Vec2::new(fire_ct as f32 - water_ct as f32, earth_ct as f32 - air_ct as f32).length()
 	};
 	
-	let damage = 5.0
+	let damage = SPELL_BASE_DAMAGE
 		* spell_magnitude 
 		* layer_shape.get_damage_multiplier() 
 		* element.get_damage_multiplier()
@@ -136,7 +139,7 @@ fn create_spell_recursive(runes: &[Rune], power_factor: f32) -> Option<SpellData
 	} else {
 		0.0
 	};
-	let mana_cost = 5.0 * total_runes as f32
+	let mana_cost = SPELL_RUNE_COST * total_runes as f32
 		+ layer_shape.get_cost_multiplier() * sub_cost;
 	
 	// Determine spell size //////////////////////////////////////////////
@@ -256,7 +259,7 @@ pub struct SpellData {
 }
 
 impl SpellData {
-	fn get_damage(&self) -> i32 {
+	pub fn get_damage(&self) -> i32 {
 		if self.damage > 0.0 {
 			self.damage.round() as i32
 		} else {
@@ -264,7 +267,7 @@ impl SpellData {
 		}
 	}
 	
-	fn get_mana_cost(&self) -> i32 {
+	pub fn get_mana_cost(&self) -> i32 {
 		if self.mana_cost > 1.0 {
 			self.mana_cost.round() as i32
 		} else {
@@ -483,7 +486,7 @@ impl SpellSize {
 		match size_factor {
 			x if x < 0.2 => SpellSize::Tiny,
 			x if x < 0.9 => SpellSize::Small,
-			x if x < 4.0 => SpellSize::Normal,
+			x if x < 3.0 => SpellSize::Normal,
 			_ => SpellSize::Large,
 		}
 	}

@@ -11,6 +11,7 @@ impl Plugin for PlayerPlugin {
 			.add_system(update_player_state.after(update_spell_casting).before(player_movement))
             .add_system(player_movement.before(physics::update_movement))
             .add_system(update_spell_casting)
+			.add_system(regen_player_mana.before(update_spell_casting))
             .add_system(update_player_animation.after(player_movement).after(update_player_state));
     }
 }
@@ -28,8 +29,27 @@ pub enum PlayerState {
 #[derive(Component, Debug)]
 pub struct PlayerSpriteMarker;
 #[derive(Component, Debug)]
-pub struct PlayerVulnerability; // TODO keep values and a timer to determine vulnerability
-// also TODO add health and mana
+pub struct PlayerVulnerability {
+	tangible: bool,
+	hit_timer: Timer,
+} // TODO add a system to update. Also add a timer somewhere that properly tracks knockback time
+#[derive(Component, Debug)]
+pub struct PlayerHealth {
+	pub health: i32,
+	pub max_health: i32,
+}
+#[derive(Component, Debug)]
+pub struct PlayerMana {
+	pub mana: i32,
+	pub max_mana: i32,
+	recharge_rate: f32,
+	recharge_spillover: f32,
+}
+
+const HEALTH_PER_HEART: i32 = 4;
+const MANA_PER_ORB: i32 = 20;
+const BASE_MANA_REGEN: f32 = 5.0;
+const MANA_REGEN_DEFACTOR: f32 = 10.0;
 
 fn player_setup(
     mut commands: Commands,
@@ -64,7 +84,9 @@ fn player_setup(
         .spawn()
         .insert(Player)
 		.insert(CurrentPlayerState(PlayerState::Normal))
-		.insert(PlayerVulnerability)
+		.insert(PlayerVulnerability::new())
+		.insert(PlayerHealth::new(4))
+		.insert(PlayerMana::new(4))
         .insert(physics::Speed(Vec2::ZERO))
         .insert_bundle(InputManagerBundle::<Action> {
             action_state: ActionState::default(),
@@ -115,6 +137,108 @@ fn update_player_state(
 			PlayerState::Normal
 		}
 	};
+}
+
+fn regen_player_mana(
+	mut query: Query<&mut PlayerMana, With<Player>>,
+	time: Res<Time>,
+) {
+	let mut player_mana = query.single_mut();
+	
+	if player_mana.mana == player_mana.max_mana {
+		return;
+	}
+	
+	let mana_increase = player_mana.recharge_spillover
+		+ BASE_MANA_REGEN * (1.0 + player_mana.recharge_rate / MANA_REGEN_DEFACTOR).sqrt() * time.delta_seconds();
+	
+	
+	let mana_increase_rounded = mana_increase.floor();
+	player_mana.mana += mana_increase_rounded as i32;
+	if player_mana.mana >= player_mana.max_mana {
+		player_mana.mana = player_mana.max_mana;
+		player_mana.recharge_spillover = 0.0;
+		player_mana.recharge_rate = 0.0;
+	} else {
+		let rate_decay = 3.0 * time.delta_seconds();
+		if player_mana.recharge_rate > rate_decay {
+			player_mana.recharge_rate -= rate_decay;
+		} else {
+			player_mana.recharge_rate = 0.0;
+		}
+		
+		player_mana.recharge_spillover = mana_increase - mana_increase_rounded;
+	}
+	
+	
+}
+
+// Health/mana stuff
+impl PlayerHealth {
+	fn new(n_hearts: u8) -> Self {
+		let health = n_hearts as i32 * HEALTH_PER_HEART;
+		PlayerHealth {
+			health,
+			max_health: health
+		}
+	}
+	pub fn get_heart_count(&self) -> usize {
+		(self.max_health / HEALTH_PER_HEART) as usize
+	}
+	pub fn get_filled_heart_count(&self) -> usize {
+		if self.health < 0 {
+			0
+		} else {
+			(self.health / HEALTH_PER_HEART) as usize
+		}
+	}
+	pub fn get_last_heart_state(&self) -> usize {
+		if self.health < 0 {
+			0
+		} else {
+			(self.health % HEALTH_PER_HEART) as usize
+		}
+	}
+}
+impl PlayerMana {
+	fn new(n_orbs: u8) -> Self {
+		let mana = n_orbs as i32 * MANA_PER_ORB;
+		PlayerMana {
+			mana,
+			max_mana: mana,
+			recharge_rate: 0.0,
+			recharge_spillover: 0.0,
+		}
+	}
+	
+	pub fn get_orb_count(&self) -> usize {
+		(self.max_mana / MANA_PER_ORB) as usize
+	}
+	pub fn get_filled_orb_count(&self) -> usize {
+		if self.mana < 0 {
+			0
+		} else {
+			(self.mana / MANA_PER_ORB) as usize
+		}
+	}
+	pub fn get_last_orb_state(&self, n_orb_states: usize) -> usize {
+		if self.mana <= 0 {
+			0
+		} else {
+			let leftover = self.mana % MANA_PER_ORB;
+			let float_amt = (leftover as f32 / MANA_PER_ORB as f32) * (n_orb_states-1) as f32;
+			float_amt.round() as usize
+		}
+	}
+}
+
+impl PlayerVulnerability {
+	fn new() -> Self {
+		Self {
+			tangible: true,
+			hit_timer: Timer::from_seconds(1.0, false),
+		}
+	}
 }
 
 // Animation stuffs
@@ -351,8 +475,8 @@ fn update_speed(current_speed: f32, target_speed: f32, delta: f32) -> f32 {
 }
 
 // Spellcasting
-fn update_spell_casting(
-    mut query: Query<(&Transform, &ActionState<Action>, &CurrentPlayerState, &mut spells::RuneCastQueue), With<Player>>,
+pub fn update_spell_casting(
+    mut query: Query<(&Transform, &ActionState<Action>, &CurrentPlayerState, &mut spells::RuneCastQueue, &mut PlayerMana), With<Player>>,
     anim_query: Query<&PlayerAnimationState, With<PlayerSpriteMarker>>,
     camera_query: Query<(&Camera, &GlobalTransform)>,
     equipped: Res<spells::EquippedRunes>,
@@ -366,7 +490,7 @@ fn update_spell_casting(
         return;
     }
 
-    let (transform, action_state, player_state, mut spell_queue) = query.single_mut();
+    let (transform, action_state, player_state, mut spell_queue, mut player_mana) = query.single_mut();
 
 	if player_state.0 == PlayerState::Knockback {
 		spell_queue.clear();
@@ -387,42 +511,52 @@ fn update_spell_casting(
     // Check if we want to cast a spell (and aren't clicking on UI)
     if ui_mouse_target.0.is_none() && action_state.just_pressed(Action::CastSpell) {
 		if let Some(spell_data) = spell_queue.generate_spell() {
-			// Figure out where the mouse is pointing
-			let offset = Vec3::new(0.0, 16.0, 0.0);
-			let (camera, camera_transform) = camera_query.single();
-			let anim_state = anim_query.single();
-
-			let maybe_world_mouse_position = ui::get_cursor_world_position(
-				windows,
-				camera,
-				camera_transform,
-				offset,
-				Vec3::Y,
-			);
-
-			let maybe_aim_dir = match maybe_world_mouse_position {
-				Some(mouse_pos) => {
-					println!("{:?}", mouse_pos);
-					(mouse_pos - transform.translation).try_normalize()
-				}
-				None => None,
-			};
-
-			let aim_dir = match maybe_aim_dir {
-				Some(aim_dir) => collapse_vec3(aim_dir),
-				None => match anim_state.facing_dir {
-					FacingDir::Right => Vec2::new(1.0, 0.0),
-					FacingDir::Left => Vec2::new(-1.0, 0.0),
-				},
-			};
+			// Determine if we have enough mana
+			if player_mana.mana >= spell_data.get_mana_cost() {
+				player_mana.mana -= spell_data.get_mana_cost();
+				player_mana.recharge_rate += spell_data.get_mana_cost() as f32;
 			
-			let start_pos = collapse_vec3(transform.translation) + 12.0 * aim_dir;
-			
-			create_spell_events.send(spells::CreateSpellEvent {
-				spell_data,
-				position: start_pos,
-				move_direction: aim_dir,
-			});
+				// Figure out where the mouse is pointing
+				let offset = Vec3::new(0.0, 16.0, 0.0);
+				let (camera, camera_transform) = camera_query.single();
+				let anim_state = anim_query.single();
+
+				let maybe_world_mouse_position = ui::get_cursor_world_position(
+					windows,
+					camera,
+					camera_transform,
+					offset,
+					Vec3::Y,
+				);
+
+				let maybe_aim_dir = match maybe_world_mouse_position {
+					Some(mouse_pos) => {
+						println!("{:?}", mouse_pos);
+						(mouse_pos - transform.translation).try_normalize()
+					}
+					None => None,
+				};
+
+				let aim_dir = match maybe_aim_dir {
+					Some(aim_dir) => collapse_vec3(aim_dir),
+					None => match anim_state.facing_dir {
+						FacingDir::Right => Vec2::new(1.0, 0.0),
+						FacingDir::Left => Vec2::new(-1.0, 0.0),
+					},
+				};
+				
+				let start_pos = collapse_vec3(transform.translation) + 12.0 * aim_dir;
+				
+				create_spell_events.send(spells::CreateSpellEvent {
+					spell_data,
+					position: start_pos,
+					move_direction: aim_dir,
+				});
+			} else {
+				// fail to cast the spell
+				player_mana.mana = 0;
+				player_mana.recharge_rate = spell_data.get_mana_cost() as f32 / 2.0;
+			}
 		}
 		spell_queue.clear();
     } else if action_state.just_pressed(Action::CancelSpell) {

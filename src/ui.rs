@@ -18,7 +18,10 @@ impl Plugin for UIPlugin {
 			.add_system(update_selection_rune_containers.before(update_rune_ui_displays))
 			.add_system(update_inventory_rune_containers.before(update_rune_ui_displays))
 			.add_system(update_queued_rune_containers.before(update_rune_ui_displays))
-            .add_system_to_stage(CoreStage::PreUpdate, update_cursor_ui_target);
+            .add_system_to_stage(CoreStage::PreUpdate, update_cursor_ui_target)
+			.add_startup_system(setup_player_ui)
+			.add_system(update_player_health_ui)
+			.add_system(update_player_mana_ui.after(player::update_spell_casting));
     }
 }
 
@@ -378,6 +381,155 @@ fn setup_spell_ui(
     // include all the new targets
     all_mouseover_targets.0.append(&mut new_mouseover_targets);
 }
+
+/// Player health/mana UI /////////////
+fn setup_player_ui(
+	mut commands: Commands,
+    asset_server: Res<AssetServer>,
+) {
+	// Load the sprites
+	let health_sprites = PlayerHealthUiSprites((0..5_i32).map(|i| {
+		let path = format!("ui/health-bar-{}.png", i);
+		asset_server.load(&path)
+	}).collect());
+	let mana_sprites = PlayerManaUiSprites((0..7_i32).map(|i| {
+		let path = format!("ui/mana-bar-{}.png", i);
+		asset_server.load(&path)
+	}).collect());
+	
+	commands.insert_resource(health_sprites);
+	commands.insert_resource(mana_sprites);
+	
+	// Set up ui elements.
+	// Upper index is pretty much arbitrary; should be more than we can expect to get health/mana
+	for i in 0..12 {
+		// Health
+		commands.spawn()
+			.insert(PlayerHealthUi(i))
+			.insert_bundle(ImageBundle {
+				node: get_scaled_size(10, 10),
+				style: Style {
+					position_type: PositionType::Absolute,
+					position: UiRect {
+						top: Val::Px(4.0),
+						left: Val::Px(4.0 + 20.0 * i as f32),
+						..default()
+					},
+					..default()
+				},
+				image: UiImage(asset_server.load("no-sprite.png")),
+				visibility: Visibility { is_visible: false },
+				..default()
+			});
+		// Mana
+		commands.spawn()
+			.insert(PlayerManaUi(i))
+			.insert_bundle(ImageBundle {
+				node: get_scaled_size(10, 10),
+				style: Style {
+					position_type: PositionType::Absolute,
+					position: UiRect {
+						top: Val::Px(24.0),
+						left: Val::Px(4.0 + 20.0 * i as f32),
+						..default()
+					},
+					..default()
+				},
+				image: UiImage(asset_server.load("no-sprite.png")),
+				visibility: Visibility { is_visible: false },
+				..default()
+			});
+	}
+}
+
+// probably could be genericized, but w/e
+#[derive(Component, Debug)]
+struct PlayerHealthUi(usize);
+#[derive(Component, Debug)]
+struct PlayerManaUi(usize);
+
+// Resources
+struct PlayerHealthUiSprites(Vec<Handle<Image>>);
+struct PlayerManaUiSprites(Vec<Handle<Image>>);
+
+fn update_player_health_ui(
+	mut ui_query: Query<(&PlayerHealthUi, &mut UiImage, &mut Visibility)>,
+	player_query: Query<&player::PlayerHealth, With<player::Player>>,
+	sprites: Res<PlayerHealthUiSprites>,
+) {
+	let player_health = player_query.single();
+	let n_hearts = player_health.get_heart_count();
+	let n_full_hearts = player_health.get_filled_heart_count();
+	let last_heart_state = player_health.get_last_heart_state();
+	
+	for (index_marker, mut image, mut visibility) in ui_query.iter_mut() {
+		let idx = index_marker.0;
+		
+		let maybe_sprite_index = match idx {
+			x if x >= n_hearts => {
+				None::<usize>
+			},
+			x if x < n_full_hearts => {
+				Some(4)
+			},
+			x if x == n_full_hearts => {
+				Some(last_heart_state)
+			},
+			_ => {
+				Some(0)
+			}
+		};
+		
+		if let Some(sprite_idx) = maybe_sprite_index {
+			if let Some(sprite_handle) = sprites.0.get(sprite_idx) {
+				image.0 = sprite_handle.clone();
+				visibility.is_visible = true;
+			}
+		} else {
+			visibility.is_visible = false;
+		}
+	}
+}
+
+fn update_player_mana_ui(
+	mut ui_query: Query<(&PlayerManaUi, &mut UiImage, &mut Visibility)>,
+	player_query: Query<&player::PlayerMana, With<player::Player>>,
+	sprites: Res<PlayerManaUiSprites>,
+) {
+	let player_mana = player_query.single();
+	let n_orbs = player_mana.get_orb_count();
+	let n_full_orbs = player_mana.get_filled_orb_count();
+	let last_orbs_state = player_mana.get_last_orb_state(7);
+	
+	for (index_marker, mut image, mut visibility) in ui_query.iter_mut() {
+		let idx = index_marker.0;
+		
+		let maybe_sprite_index = match idx {
+			x if x >= n_orbs => {
+				None::<usize>
+			},
+			x if x < n_full_orbs => {
+				Some(6)
+			},
+			x if x == n_full_orbs => {
+				Some(last_orbs_state)
+			},
+			_ => {
+				Some(0)
+			}
+		};
+		
+		if let Some(sprite_idx) = maybe_sprite_index {
+			if let Some(sprite_handle) = sprites.0.get(sprite_idx) {
+				image.0 = sprite_handle.clone();
+				visibility.is_visible = true;
+			}
+		} else {
+			visibility.is_visible = false;
+		}
+	}
+}
+
 
 //// Update spell selection ///////////////////////////////
 fn update_spell_selection(
