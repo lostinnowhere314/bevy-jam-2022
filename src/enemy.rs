@@ -1,17 +1,18 @@
 
 use bevy::{
 	prelude::*,
-	utils::Duration
+	utils::{Duration, HashMap},
 };
 use bevy_turborand::*;
 use std::f32::consts::PI;
-use super::{player, physics, sprite, ui, spells, collapse_vec3, expand_vec2, levels};
+use super::{player, physics, ui, spells, collapse_vec3, expand_vec2, levels};
 
 pub struct EnemyPlugin;
 
 impl Plugin for EnemyPlugin {
 	fn build(&self, app: &mut App) {
 		app
+			.add_startup_system_to_stage(StartupStage::PreStartup, load_enemy_sprites)
 			.add_system(enemy_ai_general_update)
 			.add_system_to_stage(CoreStage::PreUpdate, knockback_pre_update)
 			.add_system(
@@ -20,9 +21,7 @@ impl Plugin for EnemyPlugin {
 					.after(spells::process_spell_enemy_collisions)
 			)
 			.add_system(do_enemy_ai::<AIPeriodicCharge>.before(knockback_post_update))
-			.add_system(clean_dead_enemies)
-			// TEST SYSTEM
-			.add_startup_system(enemy_test_system);
+			.add_system(clean_dead_enemies);
 	}	
 }
 
@@ -273,47 +272,36 @@ impl Default for AIPeriodicCharge {
 	}
 }
 
+// Sprite loading
+#[derive(Deref, DerefMut)]
+pub struct EnemySprites(pub HashMap<String, Handle<TextureAtlas>>);
+impl EnemySprites {
+	pub fn get_sprite(&self, key: &str) -> Handle<TextureAtlas> {
+		self.0.get(&key.to_string()).expect("invalid enemy sprite key encountered").clone()
+	}
+}
 
-
-
-
-// TODO testing; remove eventually
-fn enemy_test_system(
+fn load_enemy_sprites(
 	mut commands: Commands,
-    asset_server: Res<AssetServer>,
+	asset_server: Res<AssetServer>,
     mut texture_atlases: ResMut<Assets<TextureAtlas>>,
-	shadow_texture: Res<sprite::ShadowTexture>,
-	mut global_rng: ResMut<GlobalRng>,
 ) {
-	let texture_handle = asset_server.load("no-sprite.png");
-    let texture_atlas = texture_atlases.add(TextureAtlas::from_grid(
-        texture_handle,
-        Vec2::new(16.0, 16.0),
-        1,
-        1,
-    ));
+	let handles = [
+		("spiky", "enemies/spiky-enemy.png", (24,24,4,2)),
+	].iter()
+		.map(|(key, path, (w,h,nx,ny))| {
+			let texture_handle = asset_server.load(*path);
+			(
+				key.to_string(), 
+				texture_atlases.add(TextureAtlas::from_grid(
+					texture_handle,
+					Vec2::new(*w as f32, *h as f32),
+					*nx,
+					*ny,
+				))
+			)
+		})
+		.collect();
 	
-	commands
-		.spawn_bundle(EnemyBundle::<AIPeriodicCharge>::new(
-			100, 
-			2, 
-			physics::Collider::Circle {
-				center: Vec2::ZERO,
-				radius: 8.0
-			}, 
-			SpatialBundle {
-				transform: Transform::from_translation(Vec3::new(60.0, 0.0, 0.0)),
-				..default()
-			},
-			&mut global_rng
-		)).with_children(|parent| {
-			parent
-				.spawn_bundle(SpriteSheetBundle {
-                    texture_atlas,
-                    ..default()
-                })
-				.insert(sprite::SpriteOffset(Vec3::new(0.0, 5.0, 0.0)))
-				.insert(sprite::FacingSpriteMarker);
-			parent.spawn_bundle(shadow_texture.get_shadow_bundle(2));
-		});
+	commands.insert_resource(EnemySprites(handles));
 }

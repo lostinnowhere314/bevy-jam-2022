@@ -107,6 +107,35 @@ pub struct AnimationTimer(pub Timer);
 #[derive(Component)]
 pub struct SimpleAnimationMarker(pub bool);
 
+#[derive(Bundle)]
+pub struct SimpleAnimationBundle {
+	#[bundle]
+	sprite_sheet: SpriteSheetBundle,
+	offset: SpriteOffset,
+	facing_marker: FacingSpriteMarker,
+	anim_marker: SimpleAnimationMarker,
+	timer: AnimationTimer,
+}
+impl SimpleAnimationBundle {
+	pub fn new(
+		texture_atlas: Handle<TextureAtlas>,
+		y_offset: f32,
+		sprite_is_reversed: bool,
+	) -> Self {
+		Self {
+			sprite_sheet: SpriteSheetBundle {
+				texture_atlas,
+				..default()
+			},
+			offset: SpriteOffset(Vec3::new(0.0, y_offset, 0.0)),
+			facing_marker: FacingSpriteMarker,
+			anim_marker: SimpleAnimationMarker(sprite_is_reversed),
+			timer: AnimationTimer(Timer::from_seconds(1.0 / 7.0, true)),
+		}
+	}
+}
+
+
 fn simple_animation_update(
     time: Res<Time>,
     mut query: Query<(
