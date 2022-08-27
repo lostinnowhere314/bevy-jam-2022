@@ -24,7 +24,8 @@ impl Plugin for UIPlugin {
 			.add_system(update_player_health_ui)
 			.add_system(update_player_mana_ui.after(player::update_spell_casting))
 			.add_startup_system(setup_message_ui)
-			.add_system(update_message_ui);
+			.add_system(update_message_ui)
+			.add_system(do_message_triggers);
     }
 }
 
@@ -387,6 +388,7 @@ fn setup_spell_ui(
 
 // Message display UI
 // Event for setting a message
+#[derive(Clone)]
 pub struct MessageEvent {
 	pub message: Option<String>,
 	pub source: MessageSource,
@@ -396,6 +398,7 @@ pub struct MessageEvent {
 pub enum MessageSource {
 	None,
 	ForceClear,
+	Tutorial0,
 }
 
 #[derive(Component)]
@@ -507,6 +510,50 @@ fn update_message_ui(
 	
 	// Update visibility
 	visibility.is_visible = message_ui_data.has_message;
+}
+
+// Message triggers
+#[derive(Component, Clone)]
+pub struct MessageTrigger {
+	pub message_event: MessageEvent,
+	pub trigger_type: MessageTriggerType,
+	pub next_message: Option<Box<MessageTrigger>>,
+}
+#[derive(Clone)]
+pub enum MessageTriggerType {
+	OnTimer(Timer),
+	OnSpellUi(bool),
+}
+
+fn do_message_triggers(
+	mut commands: Commands,
+	mut query: Query<(Entity, &mut MessageTrigger)>,
+	mut message_events: EventWriter<MessageEvent>,
+	// Needs a bunch of random arguments to be able to check all of the triggers
+	time: Res<Time>,
+    spell_ui_active: Res<SpellUiActive>,
+) {
+	for (e, mut trigger) in query.iter_mut() {
+		let is_activated = match &mut trigger.trigger_type {
+			MessageTriggerType::OnTimer(ref mut timer) => {
+				timer.tick(time.delta());
+				timer.just_finished()
+			},
+			MessageTriggerType::OnSpellUi(open) => {
+				*open == spell_ui_active.0
+			}
+		};
+		if is_activated {
+			// Send message event
+			message_events.send(trigger.message_event.clone());
+			// Despawn the trigger
+			commands.entity(e).despawn();
+			// Spawn its child, if one exists
+			if let Some(next_trigger) = &trigger.next_message {
+				commands.spawn().insert((**next_trigger).clone());
+			}
+		}
+	}
 }
 
 // Player health/mana UI /////////////
