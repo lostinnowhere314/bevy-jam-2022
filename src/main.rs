@@ -18,6 +18,7 @@ mod spells;
 mod sprite;
 mod ui;
 mod enemy;
+mod levels;
 
 // theme = combine
 fn main() {

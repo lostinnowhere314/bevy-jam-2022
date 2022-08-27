@@ -5,7 +5,7 @@ use bevy::{
 };
 use bevy_turborand::*;
 use std::f32::consts::PI;
-use super::{player, physics, sprite, ui, spells, collapse_vec3, expand_vec2};
+use super::{player, physics, sprite, ui, spells, collapse_vec3, expand_vec2, levels};
 
 pub struct EnemyPlugin;
 
@@ -53,6 +53,7 @@ pub struct EnemyBundle<T: EnemyAIState> {
 	spatial: SpatialBundle,
 	rng: RngComponent,
 	knockback: EnemyKnockbackComponent,
+	cleanup: levels::CleanUpOnRoomLoad,
 }
 
 impl<T: EnemyAIState> EnemyBundle<T> {
@@ -96,6 +97,7 @@ impl<T: EnemyAIState> EnemyBundle<T> {
 			spatial,
 			rng: RngComponent::with_seed(global_rng.u64(0..=u64::MAX)),
 			knockback: EnemyKnockbackComponent::new(),
+			cleanup: levels::CleanUpOnRoomLoad,
 		}
 	}
 }

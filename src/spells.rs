@@ -1,4 +1,4 @@
-use super::{physics, sprite, ui, enemy, expand_vec2, collapse_vec3};
+use super::{physics, sprite, ui, enemy, levels, expand_vec2, collapse_vec3};
 use bevy::{prelude::*, utils::HashMap};
 use bevy_turborand::*;
 
@@ -624,6 +624,7 @@ fn create_spells_from_events(
 				.spawn()
 				.insert(SpellMarker)
 				.insert(event.spell_data.clone())
+				.insert(levels::CleanUpOnRoomLoad)
 				.insert(physics::CollisionSource::<physics::DamagesEnemies>::new(
 					physics::Collider::Circle {
 						center: Vec2::ZERO,
