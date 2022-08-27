@@ -25,6 +25,7 @@ fn main() {
         .insert_resource(WindowDescriptor {
             width: 640.0,
             height: 400.0,
+			resizable: false,
             ..default()
         })
         .insert_resource(ImageSettings::default_nearest())
