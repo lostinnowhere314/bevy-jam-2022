@@ -35,7 +35,7 @@ pub struct InteractsWithEnemies;
 pub struct TakesSpace;
 
 // Walls and TakesSpace collisions
-
+// TODO walls
 
 
 fn do_takes_space_collisions(

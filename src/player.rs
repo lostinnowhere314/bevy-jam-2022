@@ -783,6 +783,7 @@ fn camera_setup(mut commands: Commands) {
 		min_x: 0.0,
 		max_x: 100.0
 	});
+	commands.insert_resource(ClearColor(Color::BLACK));
 }
 
 fn update_camera (

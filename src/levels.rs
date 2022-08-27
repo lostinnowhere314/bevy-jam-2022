@@ -108,6 +108,7 @@ use sprite::*;
 use enemy::*;
 use physics::*;
 use spells::*;
+use player::*;
 
 fn at_location(x: f32, y: f32) -> SpatialBundle {
 	at_location_vec(Vec2::new(x,y))
@@ -127,6 +128,10 @@ fn transition_to_room(
 	mut transition_events: EventReader<RoomTransitionEvent>,
 	mut current_room: ResMut<CurrentRoom>,
 	cleanup_query: Query<Entity, With<CleanUpOnRoomLoad>>,
+	// Things needed for setup
+	mut player_query: Query<&mut Transform, With<Player>>,
+	mut camera_bounds: ResMut<CameraBounds>,
+	mut clear_color: ResMut<ClearColor>,
 	// Things needed to spawn the destination room
 	mut message_events: EventWriter<MessageEvent>,
 	mut global_rng: ResMut<GlobalRng>,
@@ -172,9 +177,8 @@ fn transition_to_room(
 		// What kind of things might we want to return from this match statement?
 		// - Camera boundaries (x1, x2)
 		// - Player start position (x,y)
-		// - Camera start position (x) 
 		// - screen clear color
-		match room_index {
+		let (new_player_pos, (cam_min_x, cam_max_x), new_clear_color) = match room_index {
 			0 => {
 				// starting room
 				// The staff
@@ -309,16 +313,21 @@ fn transition_to_room(
 						parent.spawn_bundle(shadow_texture.get_shadow_bundle(2));
 					});
 				
-				// TODO Testing thing for room transitions
+				// Room transitions
 				commands.spawn()
-					.insert(CollisionSource::<InteractsWithPlayer>::new(Collider::Circle {
-						center: Vec2::ZERO,
-						radius: 12.0,
-					}))
+					.insert(CollisionSource::<InteractsWithPlayer>::new(Collider::LineSegment(
+						Vec2::new(-32.0,0.0),
+						Vec2::new(32.0,0.0),
+					)))
 					.insert(PlayerInteraction::RoomTransition)
 					.insert(CleanUpOnRoomLoad)
 					.insert_bundle(at_location(0.0,-72.0));
 				
+				(
+					Vec2::new(-50.0, 0.0),
+					(0.0, 0.0),
+					Color::hex("75A743").unwrap()
+				)
 			}
 			1 => {
 				// testing-ish
@@ -340,9 +349,26 @@ fn transition_to_room(
 						));
 						parent.spawn_bundle(shadow_texture.get_shadow_bundle(2));
 					});
+				
+				(
+					Vec2::new(-50.0, 0.0),
+					(0.0, 160.0),
+					Color::hex("75A743").unwrap()
+				)
 			}
 			_ => panic!("attempted to transition to non-existent room {}", room_index)
-		}
+		};
+		
+		// Update player position
+		let mut player_transform = player_query.single_mut();
+		player_transform.translation = expand_vec2(new_player_pos);
+		
+		// Update camera bounds
+		camera_bounds.min_x = cam_min_x;
+		camera_bounds.max_x = cam_max_x;
+		
+		// Update clear color
+		clear_color.0 = new_clear_color;
 		
 		current_room.0 = Some(room_index);
 	}
