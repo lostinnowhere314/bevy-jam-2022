@@ -99,8 +99,8 @@ fn player_setup(
         .insert_bundle(SpatialBundle::default())
         .insert(spells::RuneCastQueue::new())
 		.insert(physics::CollisionRecipient::<physics::WallCollidable>::new(collider.clone()))
-		.insert(physics::CollisionRecipient::<physics::DamagesPlayer>::new(collider.clone()))
-		.insert(physics::ColliderActive::<physics::DamagesPlayer>::new(true))
+		.insert(physics::CollisionRecipient::<physics::InteractsWithPlayer>::new(collider.clone()))
+		.insert(physics::ColliderActive::<physics::InteractsWithPlayer>::new(true))
 		.insert(physics::SymmetricCollisionSource::<physics::TakesSpace>::new(collider))
         .with_children(|parent| {
             // Manage the sprite properly
@@ -289,7 +289,7 @@ fn update_take_damage(
 		&Transform
 	), With<Player>>,
 	damage_query: Query<(&enemy::DamagePlayerComponent, &Transform)>,
-	collisions: Res<physics::ActiveCollisions<physics::DamagesPlayer>>,
+	collisions: Res<physics::ActiveCollisions<physics::InteractsWithPlayer>>,
     spell_ui_active: Res<ui::SpellUiActive>,
 ) {
 	if spell_ui_active.0 {

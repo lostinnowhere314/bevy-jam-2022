@@ -14,8 +14,8 @@ impl Plugin for GeneralPhysicsPlugin {
         app
 			.add_system(update_movement)
 			.add_plugin(CollisionPlugin::<WallCollidable>::default())
-			.add_plugin(CollisionPlugin::<DamagesPlayer>::default())
-			.add_plugin(CollisionPlugin::<DamagesEnemies>::default())
+			.add_plugin(CollisionPlugin::<InteractsWithPlayer>::default())
+			.add_plugin(CollisionPlugin::<InteractsWithEnemies>::default())
 			.add_plugin(SymmetricCollisionPlugin::<TakesSpace>::default());
     }
 }
@@ -24,9 +24,9 @@ impl Plugin for GeneralPhysicsPlugin {
 #[derive(Default)]
 pub struct WallCollidable;
 #[derive(Default)]
-pub struct DamagesPlayer;
+pub struct InteractsWithPlayer;
 #[derive(Default)]
-pub struct DamagesEnemies;
+pub struct InteractsWithEnemies;
 // symmetric for player and enemies; prevents occupying same space
 #[derive(Default)]
 pub struct TakesSpace;

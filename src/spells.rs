@@ -20,7 +20,7 @@ impl Plugin for SpellPlugin {
 			.add_system_to_stage(
 				CoreStage::PostUpdate,
 				despawn_spells
-					.before(physics::resolve_collisions::<physics::DamagesEnemies>)
+					.before(physics::resolve_collisions::<physics::InteractsWithEnemies>)
 			)
 			.add_system(create_spells_from_events
 				.after(process_spell_enemy_collisions));
@@ -514,7 +514,7 @@ impl SpellSize {
 pub fn process_spell_enemy_collisions(
 	spell_query: Query<(&SpellData, &Transform, &physics::Speed), With<SpellMarker>>,
 	mut enemy_query: Query<(&mut enemy::EnemyHealth, &mut enemy::EnemyKnockbackComponent)>,
-	collisions: Res<physics::ActiveCollisions<physics::DamagesEnemies>>,
+	collisions: Res<physics::ActiveCollisions<physics::InteractsWithEnemies>>,
 	mut spell_despawn_events: EventWriter<SpellDespawnEvent>,
 	mut create_spell_events: EventWriter<CreateSpellEvent>,
 ) {
@@ -625,7 +625,7 @@ fn create_spells_from_events(
 				.insert(SpellMarker)
 				.insert(event.spell_data.clone())
 				.insert(levels::CleanUpOnRoomLoad)
-				.insert(physics::CollisionSource::<physics::DamagesEnemies>::new(
+				.insert(physics::CollisionSource::<physics::InteractsWithEnemies>::new(
 					physics::Collider::Circle {
 						center: Vec2::ZERO,
 						radius: spell_data.size.get_collide_radius()
