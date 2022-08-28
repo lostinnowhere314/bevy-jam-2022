@@ -583,7 +583,7 @@ fn despawn_spells(
 			}
 		}
 		
-		commands.entity(event.0).despawn_recursive();
+		commands.get_or_spawn(event.0).despawn_recursive();
 	}
 }
 

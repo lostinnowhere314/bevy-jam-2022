@@ -583,7 +583,7 @@ fn do_message_triggers(
 			// Send message event
 			message_events.send(trigger.message_event.clone());
 			// Despawn the trigger
-			commands.entity(e).despawn();
+			commands.get_or_spawn(e).despawn();
 			// Spawn its child, if one exists
 			if let Some(next_trigger) = &trigger.next_message {
 				commands.spawn().insert((**next_trigger).clone());

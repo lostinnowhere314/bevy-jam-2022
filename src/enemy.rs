@@ -210,7 +210,7 @@ fn clean_dead_enemies(
 ) {
 	for (e, health) in query.iter() {
 		if health.0 <= 0 {
-			commands.entity(e).despawn_recursive();
+			commands.get_or_spawn(e).despawn_recursive();
 		}
 	}
 }

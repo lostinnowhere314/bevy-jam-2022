@@ -57,11 +57,11 @@ fn do_player_interaction(
 			match interaction {
 				PlayerInteraction::GiveStaff => {
 					staff_events.send(player::GiveStaffEvent);
-					commands.entity(e).despawn_recursive();
+					commands.get_or_spawn(e).despawn_recursive();
 				},
 				PlayerInteraction::RoomTransition => {
 					transition_events.send(RoomTransitionEvent(DestinationRoom::NextRoom));
-					commands.entity(e).despawn_recursive();
+					commands.get_or_spawn(e).despawn_recursive();
 				}
 				PlayerInteraction::GiveRune(i) => {
 					rune_inventory.0.get_mut(*i).expect("invalid rune id in GiveRune").unlocked = true;
@@ -80,7 +80,7 @@ fn do_player_interaction(
 					});
 					
 					
-					commands.entity(e).despawn_recursive();
+					commands.get_or_spawn(e).despawn_recursive();
 				}
 			}
 		}
@@ -98,7 +98,7 @@ fn update_gate(
 ) {
 	if enemy_query.is_empty() {
 		for e in gate_query.iter() {
-			commands.entity(e).despawn_recursive();
+			commands.get_or_spawn(e).despawn_recursive();
 		}
 	}
 }
@@ -180,7 +180,7 @@ fn transition_to_room(
 	if let Some(transition_event) = maybe_transition_event {	
 		// Clean up from previous room 
 		for entity in cleanup_query.iter() {
-			commands.entity(entity).despawn_recursive();
+			commands.get_or_spawn(entity).despawn_recursive();
 		}
 		
 		// Figure out room index
