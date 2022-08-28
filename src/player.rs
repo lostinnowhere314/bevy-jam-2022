@@ -673,7 +673,6 @@ pub fn update_spell_casting(
 
 				let maybe_aim_dir = match maybe_world_mouse_position {
 					Some(mouse_pos) => {
-						println!("{:?}", mouse_pos);
 						(mouse_pos - transform.translation).try_normalize()
 					}
 					None => None,
