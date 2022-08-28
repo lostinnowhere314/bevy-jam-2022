@@ -341,7 +341,7 @@ fn transition_to_room(
 						parent.spawn_bundle(shadow_texture.get_shadow_bundle(2));
 					});
 				
-				// Room transitions
+				// Room transition
 				commands.spawn()
 					.insert(CollisionSource::<InteractsWithPlayer>::new(Collider::LineSegment(
 						Vec2::new(-32.0,0.0),
@@ -424,10 +424,76 @@ fn transition_to_room(
 						parent.spawn_bundle(shadow_texture.get_shadow_bundle(1));
 					});*/
 				
+				// Walls
+				commands
+					.spawn_bundle(Wall::new(Vec2::new(-128.0, -64.0), Vec2::new(96.0, -64.0), true))
+					.insert_bundle(at_origin());
+				commands
+					.spawn_bundle(Wall::new(Vec2::new(160.0, -64.0), Vec2::new(188.0, -64.0), true))
+					.insert_bundle(at_origin());
+				commands
+					.spawn_bundle(Wall::new(Vec2::new(188.0, -64.0), Vec2::new(188.0, 80.0), true))
+					.insert_bundle(at_origin());
+				commands
+					.spawn_bundle(Wall::new(Vec2::new(-128.0, 80.0), Vec2::new(-128.0, -64.0), true))
+					.insert_bundle(at_origin());
+				commands
+					.spawn_bundle(Wall::new(Vec2::new(188.0, 80.0), Vec2::new(-128.0, 80.0), true))
+					.insert_bundle(at_origin());
+				
+				
+				// Gate
+				commands.spawn()
+					.insert(GateMarker)
+					.insert_bundle(at_location(128.0, -64.0))
+					.insert_bundle(Wall::new(Vec2::new(-32.0,0.0), Vec2::new(32.0,0.0), true))
+					.insert(CleanUpOnRoomLoad)
+					.with_children(|parent| {
+						parent.spawn_bundle(FacingSpriteBundle::new(
+							level_textures.get_sprite("gate"),
+							32.0
+						));
+					});
+				// Room transition
+				commands.spawn()
+					.insert(CollisionSource::<InteractsWithPlayer>::new(Collider::LineSegment(
+						Vec2::new(-32.0,0.0),
+						Vec2::new(32.0,0.0),
+					)))
+					.insert(PlayerInteraction::RoomTransition)
+					.insert(CleanUpOnRoomLoad)
+					.insert_bundle(at_location(128.0,-74.0));
+				
+				
+				// Background
+				commands.spawn()
+					.insert_bundle(at_location(16.0,-64.0))
+					.insert(CleanUpOnRoomLoad)
+					.with_children(|parent| {
+						for i in -5..=12 {
+							if i == 4 || i == 5 {
+								continue;
+							}
+							parent.spawn_bundle(FacingSpriteBundle::new_vec(
+								level_textures.get_sprite("bg0"), 
+								Vec3::new(32.0 * i as f32, 45.0, -10.0)
+							));
+						}
+					});
+					
+				// Metadata
 				(
 					Vec2::new(-150.0, 40.0),
 					(0.0, 80.0),
 					Color::hex("75A743").unwrap()
+				)
+			},
+			2 => {
+				// Placeholder
+				(
+					Vec2::new(0.0, 0.0),
+					(0.0, 0.0),
+					Color::hex("000000").unwrap()
 				)
 			}
 			_ => panic!("attempted to transition to non-existent room {}", room_index)
