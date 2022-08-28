@@ -138,21 +138,27 @@ impl SimpleAnimationBundle {
 #[derive(Bundle)]
 pub struct FacingSpriteBundle {
 	#[bundle]
-	sprite: SpriteBundle,
-	offset: SpriteOffset,
-	facing_marker: FacingSpriteMarker,
+	pub sprite: SpriteBundle,
+	pub offset: SpriteOffset,
+	pub facing_marker: FacingSpriteMarker,
 }
 impl FacingSpriteBundle {
 	pub fn new(
 		texture: Handle<Image>,
 		y_offset: f32,
 	) -> Self {
+		Self::new_vec(texture, Vec3::new(0.0, y_offset, 0.0))
+	}
+	pub fn new_vec(
+		texture: Handle<Image>,
+		offset: Vec3,
+	) -> Self {
 		Self {
 			sprite: SpriteBundle {
 				texture,
 				..default()
 			},
-			offset: SpriteOffset(Vec3::new(0.0, y_offset, 0.0)),
+			offset: SpriteOffset(offset),
 			facing_marker: FacingSpriteMarker,
 		}
 	}

@@ -1,4 +1,4 @@
-use super::{ui, expand_vec2, collapse_vec3};
+use super::{ui, levels, expand_vec2, collapse_vec3};
 use bevy::{
 	prelude::*,
 	transform::transform_propagate_system,
@@ -39,7 +39,8 @@ pub struct TakesSpace;
 #[derive(Bundle)]
 pub struct Wall {
 	collision: CollisionSource<WallCollidable>,
-	in_direction: WallInsideDirection
+	in_direction: WallInsideDirection,
+	marker: levels::CleanUpOnRoomLoad,
 }
 // Normal vector of the wall
 #[derive(Component)]
@@ -59,7 +60,8 @@ impl Wall {
 				point1,
 				point2
 			)),
-			in_direction: WallInsideDirection(wall_normal)
+			in_direction: WallInsideDirection(wall_normal),
+			marker: levels::CleanUpOnRoomLoad
 		}
 	}
 }

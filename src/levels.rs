@@ -94,6 +94,7 @@ fn load_level_sprites(
 ) {
 	let handles = [
 		("gate", "level/gate.png"),
+		("bg0", "level/bg-forest.png"),
 	].iter()
 		.map(|(key, path)| {
 			(key.to_string(), asset_server.load(*path))
@@ -118,6 +119,9 @@ fn at_location_vec(loc: Vec2) -> SpatialBundle {
 		transform: Transform::from_translation(expand_vec2(loc)),
 		..default()
 	}
+}
+fn at_origin() -> SpatialBundle {
+	at_location(0.0, 0.0)
 }
 
 // Transition function.
@@ -262,7 +266,7 @@ fn transition_to_room(
 				// Gate
 				commands.spawn()
 					.insert(GateMarker)
-					.insert_bundle(at_location(0.0, -50.0))
+					.insert_bundle(at_location(0.0, -64.0))
 					.insert_bundle(Wall::new(Vec2::new(-32.0,0.0), Vec2::new(32.0,0.0), true))
 					.insert(CleanUpOnRoomLoad)
 					.with_children(|parent| {
@@ -283,7 +287,7 @@ fn transition_to_room(
 							center: Vec2::ZERO,
 							radius: 8.0
 						}, 
-						at_location(-32.0,-40.0),
+						at_location(-32.0,-56.0),
 						&mut global_rng
 					)).with_children(|parent| {
 						parent.spawn_bundle(SimpleAnimationBundle::new(
@@ -303,7 +307,7 @@ fn transition_to_room(
 							center: Vec2::ZERO,
 							radius: 8.0
 						}, 
-						at_location(32.0,-40.0),
+						at_location(32.0,-56.0),
 						&mut global_rng
 					)).with_children(|parent| {
 						parent.spawn_bundle(SimpleAnimationBundle::new(
@@ -322,8 +326,41 @@ fn transition_to_room(
 					)))
 					.insert(PlayerInteraction::RoomTransition)
 					.insert(CleanUpOnRoomLoad)
-					.insert_bundle(at_location(0.0,-72.0));
+					.insert_bundle(at_location(0.0,-74.0));
 				
+				// Background
+				commands.spawn()
+					.insert_bundle(at_location(16.0,-64.0))
+					.insert(CleanUpOnRoomLoad)
+					.with_children(|parent| {
+						for i in -5..=5 {
+							if i == 0 || i == -1 {
+								continue;
+							}
+							parent.spawn_bundle(FacingSpriteBundle::new_vec(
+								level_textures.get_sprite("bg0"), 
+								Vec3::new(32.0 * i as f32, 45.0, -10.0)
+							));
+						}
+					});
+				// Walls
+				commands
+					.spawn_bundle(Wall::new(Vec2::new(-128.0, -64.0), Vec2::new(-32.0, -64.0), true))
+					.insert_bundle(at_origin());
+				commands
+					.spawn_bundle(Wall::new(Vec2::new(32.0, -64.0), Vec2::new(128.0, -64.0), true))
+					.insert_bundle(at_origin());
+				commands
+					.spawn_bundle(Wall::new(Vec2::new(128.0, -64.0), Vec2::new(128.0, 64.0), true))
+					.insert_bundle(at_origin());
+				commands
+					.spawn_bundle(Wall::new(Vec2::new(-128.0, 64.0), Vec2::new(-128.0, -64.0), true))
+					.insert_bundle(at_origin());
+				commands
+					.spawn_bundle(Wall::new(Vec2::new(128.0, 64.0), Vec2::new(-128.0, 64.0), true))
+					.insert_bundle(at_origin());
+				
+				// Data needed for all the things
 				(
 					Vec2::new(-50.0, 0.0),
 					(0.0, 0.0),
