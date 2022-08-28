@@ -664,7 +664,8 @@ fn create_spells_from_events(
 						.insert_bundle(SpriteSheetBundle {
 							texture_atlas: texture_data.texture_atlas.clone(),
 							..default()
-						});
+						})
+						.insert(sprite::SpriteHover::new(3.0, 3.0));
 					parent.spawn_bundle(
 						shadow_texture.get_shadow_bundle(
 							spell_data.size.get_shadow_index()
