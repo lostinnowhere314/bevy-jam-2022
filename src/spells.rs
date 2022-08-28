@@ -206,7 +206,7 @@ impl RuneInventory {
 		RuneInventory(vec![
 			RuneInventorySlot {
 				rune: Rune::ElementRune(SpellElement::Fire),
-				unlocked: true,//false,
+				unlocked: false,
 			},
 			RuneInventorySlot {
 				rune: Rune::ElementRune(SpellElement::Water),
@@ -214,11 +214,11 @@ impl RuneInventory {
 			},
 			RuneInventorySlot {
 				rune: Rune::ElementRune(SpellElement::Earth),
-				unlocked: true,//false,
+				unlocked: false,
 			},
 			RuneInventorySlot { 
 				rune: Rune::ElementRune(SpellElement::Air),
-				unlocked: true,//false,
+				unlocked: true,
 			},
 			RuneInventorySlot {
 				rune: Rune::ShapeRune(SpellShape::Orb), 
@@ -481,7 +481,7 @@ impl SpellShape {
 			Self::Scatter => 1.0,
 		};
 		
-		75.0 * multiplier
+		50.0 * multiplier
 	}
 	
 	fn get_num_projectiles(&self) -> i32 {

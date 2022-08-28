@@ -22,6 +22,7 @@ impl Plugin for EnemyPlugin {
 			)
 			.add_system(do_enemy_ai::<NoAI>.before(knockback_post_update))
 			.add_system(do_enemy_ai::<AIPeriodicCharge>.before(knockback_post_update))
+			.add_system(do_enemy_ai::<AIRotateAround>.before(knockback_post_update))
 			.add_system(clean_dead_enemies);
 	}	
 }
@@ -234,14 +235,14 @@ impl EnemyAIState for NoAI {
 	}
 }
 
-
+// //////////////////////////////////////////////////////////////////////
 #[derive(Component)]
 pub struct AIPeriodicCharge {
-	timer: Timer,
-	is_charging: bool,
-	speed: f32,
-	max_dev_angle: f32,
-	target_speed: Vec2,
+	pub timer: Timer,
+	pub is_charging: bool,
+	pub speed: f32,
+	pub max_dev_angle: f32,
+	pub target_speed: Vec2,
 }
 
 impl EnemyAIState for AIPeriodicCharge {
@@ -294,6 +295,106 @@ impl Default for AIPeriodicCharge {
 	}
 }
 
+
+// //////////////////////////////////////////////////////////////////////
+#[derive(Component, Debug)]
+pub struct AIRotateAround {
+	pub is_charging: bool,
+	pub rotate_max_speed: f32,
+	pub rotate_period_coef: f32,
+	pub rotate_dist: f32,
+	pub charge_speed: f32,
+	pub time_counter: Duration,
+	pub charge_decide_rate: f32,
+	pub charge_timer: Timer,
+}
+
+impl Default for AIRotateAround {
+	fn default() -> Self {
+		Self {
+			is_charging: false,
+			rotate_max_speed: 100.0,
+			charge_speed: 160.0,
+			rotate_dist: 80.0,
+			time_counter: Duration::from_secs(0),
+			rotate_period_coef: std::f32::consts::TAU / 6.0,
+			charge_decide_rate: 0.25,
+			charge_timer: Timer::from_seconds(2.0 * 80.0 / 140.0, false),
+		}
+	}
+}
+
+impl AIRotateAround {
+	fn new(rotate_max_speed: f32, rotate_period: f32, rotate_dist: f32, charge_speed: f32, charge_frequency: f32) -> Self {
+		Self {
+			rotate_max_speed,
+			charge_speed,
+			rotate_period_coef: std::f32::consts::TAU / rotate_period,
+			rotate_dist,
+			charge_decide_rate: 1.0 / charge_frequency,
+			charge_timer: Timer::from_seconds(2.0 * rotate_dist / charge_speed, false),
+			..default()
+		}
+	}
+}
+
+impl EnemyAIState for AIRotateAround {
+	fn update(
+		&mut self,
+		general_state: &AIGeneralState, 
+		speed: &mut physics::Speed, 
+		own_pos: &mut Transform,
+		player_pos: Vec2,
+		time_delta: Duration,
+		rng: &mut RngComponent,
+	) {
+		if !general_state.has_noticed_player {
+			return;
+		}
+		
+		self.time_counter += time_delta;
+		
+		if !self.is_charging {
+			let own_pos_2d = collapse_vec3(own_pos.translation);
+			
+			// decide if we should start charging
+			// (this makes it exponentially distributed)
+			let start_charging = rng.chance(-1.0 * (-1.0 * time_delta.as_secs_f64() * self.charge_decide_rate as f64).exp_m1());
+			if start_charging {
+				self.charge_timer.reset();
+				self.is_charging = true;
+				
+				speed.0 = (player_pos - own_pos_2d).normalize_or_zero() * self.charge_speed;
+			} else {
+				// Determine how to move
+				let current_speed = (self.time_counter.as_secs_f32() * self.rotate_period_coef).sin() * self.rotate_max_speed;
+				
+				let player_dist_vec = player_pos - own_pos_2d;
+				let circle_inward = (player_dist_vec).normalize_or_zero();
+				let circle_tangent = circle_inward.perp();
+				let dist_to_player = player_dist_vec.length();
+				
+				// Make a vector in the direction* we want to move
+				// (if speed is negative, we want to move in the opposite of this direction)
+				let move_direction = (
+					circle_tangent
+					+ circle_inward * current_speed.signum() / (
+						1.0 + 2.0 * (dist_to_player / self.rotate_dist - 1.0).abs()
+					)
+				).normalize();
+				
+				speed.0 = move_direction * current_speed;
+			}
+		} else {
+			// We just keep moving as we were
+			self.charge_timer.tick(time_delta);
+			if self.charge_timer.finished() {
+				self.is_charging = false;
+			}
+		}
+	}
+}
+
 // Sprite loading
 #[derive(Deref, DerefMut)]
 pub struct EnemySprites(pub HashMap<String, Handle<TextureAtlas>>);
@@ -310,6 +411,7 @@ fn load_enemy_sprites(
 ) {
 	let handles = [
 		("spiky", "enemies/spiky-enemy.png", (24,24,4,2)),
+		("eye", "enemies/eye-enemy.png", (20,20,8,1)),
 	].iter()
 		.map(|(key, path, (w,h,nx,ny))| {
 			let texture_handle = asset_server.load(*path);

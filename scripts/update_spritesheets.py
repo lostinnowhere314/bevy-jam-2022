@@ -79,6 +79,7 @@ if __name__ == '__main__':
         ('player.pdn', 'player/player.png'),
         ('player-staff.pdn', 'player/player-staff.png'),
         ('spiky-enemy.pdn', 'enemies/spiky-enemy.png'),
+        ('creepy-enemy.pdn', 'enemies/eye-enemy.png'),
         ('gate.pdn', 'level/gate.png'),
         ('background-forest.pdn', 'level/bg-forest.png'),
     ]

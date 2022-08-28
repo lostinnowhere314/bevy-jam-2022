@@ -400,6 +400,7 @@ pub enum MessageSource {
 	ForceClear,
 	Tutorial,
 	ObtainedRune,
+	Ending,
 }
 
 #[derive(Component)]
