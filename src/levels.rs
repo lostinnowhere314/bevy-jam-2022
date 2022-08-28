@@ -206,7 +206,7 @@ fn transition_to_room(
 		// - Player start position (x,y)
 		// - screen clear color
 		let (new_player_pos, (cam_min_x, cam_max_x), new_clear_color) = match room_index {
-			0 => {
+			0 => { // ////////////////////////////////////////////////////////////////////////////////
 				// starting room
 				// The staff
 				commands.spawn()
@@ -390,11 +390,25 @@ fn transition_to_room(
 					Color::hex("75A743").unwrap()
 				)
 			}
-			1 => {
-				// testing-ish
+			1 => { // ////////////////////////////////////////////////////////////////////////////////
+				// Messages
+				message_events.send(MessageEvent {
+						message: Some("Defeat all enemies in the room to unlock the gate.".to_string()),
+						source: MessageSource::Tutorial,
+					});
+				commands.spawn().insert(MessageTrigger {
+					message_event: MessageEvent {
+						message: None,
+						source: MessageSource::Tutorial,
+					},
+					trigger_type: MessageTriggerType::OnTimer(Timer::from_seconds(4.0, false)),
+					next_message: None,
+				});
+					
+				// Enemy
 				commands
 					.spawn_bundle(EnemyBundle::<AIPeriodicCharge>::new(
-						100, 
+						40, 
 						2, 
 						Collider::Circle {
 							center: Vec2::ZERO,
@@ -429,16 +443,16 @@ fn transition_to_room(
 					.spawn_bundle(Wall::new(Vec2::new(-128.0, -64.0), Vec2::new(96.0, -64.0), true))
 					.insert_bundle(at_origin());
 				commands
-					.spawn_bundle(Wall::new(Vec2::new(160.0, -64.0), Vec2::new(188.0, -64.0), true))
+					.spawn_bundle(Wall::new(Vec2::new(160.0, -64.0), Vec2::new(208.0, -64.0), true))
 					.insert_bundle(at_origin());
 				commands
-					.spawn_bundle(Wall::new(Vec2::new(188.0, -64.0), Vec2::new(188.0, 80.0), true))
-					.insert_bundle(at_origin());
-				commands
-					.spawn_bundle(Wall::new(Vec2::new(-128.0, 80.0), Vec2::new(-128.0, -64.0), true))
+					.spawn_bundle(Wall::new(Vec2::new(208.0, -64.0), Vec2::new(208.0, 80.0), true))
 					.insert_bundle(at_origin());
 				commands
 					.spawn_bundle(Wall::new(Vec2::new(188.0, 80.0), Vec2::new(-128.0, 80.0), true))
+					.insert_bundle(at_origin());
+				commands
+					.spawn_bundle(Wall::new(Vec2::new(-128.0, 80.0), Vec2::new(-128.0, -64.0), true))
 					.insert_bundle(at_origin());
 				
 				
@@ -471,7 +485,7 @@ fn transition_to_room(
 					.insert(CleanUpOnRoomLoad)
 					.with_children(|parent| {
 						for i in -5..=12 {
-							if i == 4 || i == 5 {
+							if i == 3 || i == 4 {
 								continue;
 							}
 							parent.spawn_bundle(FacingSpriteBundle::new_vec(
@@ -483,12 +497,142 @@ fn transition_to_room(
 					
 				// Metadata
 				(
-					Vec2::new(-150.0, 40.0),
+					Vec2::new(-100.0, 40.0),
 					(0.0, 80.0),
 					Color::hex("75A743").unwrap()
 				)
 			},
-			2 => {
+			2 => { // ////////////////////////////////////////////////////////////////////////////////
+				// Messages
+				message_events.send(MessageEvent {
+						message: Some("Defeat all enemies in the room to unlock the gate.".to_string()),
+						source: MessageSource::Tutorial,
+					});
+				commands.spawn().insert(MessageTrigger {
+					message_event: MessageEvent {
+						message: None,
+						source: MessageSource::Tutorial,
+					},
+					trigger_type: MessageTriggerType::OnTimer(Timer::from_seconds(4.0, false)),
+					next_message: None,
+				});
+					
+				// Enemy
+				commands
+					.spawn_bundle(EnemyBundle::<AIPeriodicCharge>::new(
+						50, 
+						1, 
+						Collider::Circle {
+							center: Vec2::ZERO,
+							radius: 8.0
+						}, 
+						at_location(80.0,-40.0),
+						&mut global_rng
+					)).with_children(|parent| {
+						parent.spawn_bundle(SimpleAnimationBundle::new(
+							enemy_textures.get_sprite("spiky"), 
+							20.0,
+							false
+						));
+						parent.spawn_bundle(shadow_texture.get_shadow_bundle(2));
+					});
+				commands
+					.spawn_bundle(EnemyBundle::<AIPeriodicCharge>::new(
+						50, 
+						1, 
+						Collider::Circle {
+							center: Vec2::ZERO,
+							radius: 8.0
+						}, 
+						at_location(100.0, 20.0),
+						&mut global_rng
+					)).with_children(|parent| {
+						parent.spawn_bundle(SimpleAnimationBundle::new(
+							enemy_textures.get_sprite("spiky"), 
+							20.0,
+							true
+						));
+						parent.spawn_bundle(shadow_texture.get_shadow_bundle(2));
+					});
+				
+				// Scroll
+				commands.spawn_bundle(at_location(0.0, 40.0))
+					.insert(CollisionSource::<InteractsWithPlayer>::new(Collider::Circle {
+						center: Vec2::ZERO,
+						radius: 12.0,
+					}))
+					.insert(PlayerInteraction::GiveRune(6))
+					.insert(CleanUpOnRoomLoad)
+					.with_children(|parent| {
+						parent.spawn_bundle(FacingSpriteBundle::new(level_textures.get_sprite("scroll"), 20.0));
+						parent.spawn_bundle(shadow_texture.get_shadow_bundle(1));
+					});
+				
+				// Walls
+				commands
+					.spawn_bundle(Wall::new(Vec2::new(-128.0, -64.0), Vec2::new(96.0, -64.0), true))
+					.insert_bundle(at_origin());
+				commands
+					.spawn_bundle(Wall::new(Vec2::new(160.0, -64.0), Vec2::new(208.0, -64.0), true))
+					.insert_bundle(at_origin());
+				commands
+					.spawn_bundle(Wall::new(Vec2::new(208.0, -64.0), Vec2::new(208.0, 80.0), true))
+					.insert_bundle(at_origin());
+				commands
+					.spawn_bundle(Wall::new(Vec2::new(208.0, 80.0), Vec2::new(-128.0, 80.0), true))
+					.insert_bundle(at_origin());
+				commands
+					.spawn_bundle(Wall::new(Vec2::new(-128.0, 80.0), Vec2::new(-128.0, -64.0), true))
+					.insert_bundle(at_origin());
+				
+				
+				// Gate
+				commands.spawn()
+					.insert(GateMarker)
+					.insert_bundle(at_location(128.0, -64.0))
+					.insert_bundle(Wall::new(Vec2::new(-32.0,0.0), Vec2::new(32.0,0.0), true))
+					.insert(CleanUpOnRoomLoad)
+					.with_children(|parent| {
+						parent.spawn_bundle(FacingSpriteBundle::new(
+							level_textures.get_sprite("gate"),
+							32.0
+						));
+					});
+				// Room transition
+				commands.spawn()
+					.insert(CollisionSource::<InteractsWithPlayer>::new(Collider::LineSegment(
+						Vec2::new(-32.0,0.0),
+						Vec2::new(32.0,0.0),
+					)))
+					.insert(PlayerInteraction::RoomTransition)
+					.insert(CleanUpOnRoomLoad)
+					.insert_bundle(at_location(128.0,-74.0));
+				
+				
+				// Background
+				commands.spawn()
+					.insert_bundle(at_location(16.0,-64.0))
+					.insert(CleanUpOnRoomLoad)
+					.with_children(|parent| {
+						for i in -5..=12 {
+							if i == 3 || i == 4 {
+								continue;
+							}
+							parent.spawn_bundle(FacingSpriteBundle::new_vec(
+								level_textures.get_sprite("bg0"), 
+								Vec3::new(32.0 * i as f32, 45.0, -10.0)
+							));
+						}
+					});
+					
+				// Metadata
+				(
+					Vec2::new(-100.0, 40.0),
+					(0.0, 80.0),
+					Color::hex("75A743").unwrap()
+				)
+			}
+			3 => {
 				// Placeholder
 				(
 					Vec2::new(0.0, 0.0),

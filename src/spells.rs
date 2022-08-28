@@ -481,7 +481,7 @@ impl SpellShape {
 			Self::Scatter => 1.0,
 		};
 		
-		4.0 * multiplier
+		75.0 * multiplier
 	}
 	
 	fn get_num_projectiles(&self) -> i32 {

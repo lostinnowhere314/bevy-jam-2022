@@ -91,7 +91,7 @@ impl<T: EnemyAIState> EnemyBundle<T> {
 			ai_state,
 			ai_data: AIGeneralState {
 				has_noticed_player: false,
-				view_radius: 200.0,
+				view_radius: 130.0,
 			},
 			health: EnemyHealth(max_health),
 			collide_damage: DamagePlayerComponent(contact_damage),
@@ -116,12 +116,6 @@ pub struct DamagePlayerComponent(pub i32);
 // Knockback handling ////////////////////////////////
 #[derive(Debug, Component)]
 pub struct EnemyKnockbackComponent(pub Vec2, f32);
-
-impl EnemyKnockbackComponent {
-	fn new() -> Self {
-		Self(Vec2::ZERO, 1.0)
-	}
-}
 
 fn knockback_pre_update(
 	mut query: Query<(&mut EnemyKnockbackComponent, &mut physics::Speed)>,
