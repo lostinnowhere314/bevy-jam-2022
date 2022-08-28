@@ -1,4 +1,4 @@
-use super::{physics, spells, sprite, ui, enemy, collapse_vec3};
+use super::{physics, spells, sprite, ui, enemy, levels, collapse_vec3};
 use bevy::{
 	prelude::*,
 	render::camera::ScalingMode
@@ -15,6 +15,7 @@ impl Plugin for PlayerPlugin {
             .add_startup_system(player_setup)
 			.add_startup_system(camera_setup)
 			.add_system(do_give_staff)
+			.add_system(do_respawn_events)
 			.add_system(flicker_if_intangible)
             .add_system(update_spell_casting)
 			.add_system(update_player_state.after(update_spell_casting).before(player_movement))
@@ -171,11 +172,12 @@ fn update_player_state(
     mut query: Query<(
 		&mut CurrentPlayerState, 
 		&mut PlayerVulnerability, 
-		&spells::RuneCastQueue
+		&spells::RuneCastQueue,
+		&PlayerHealth,
 	), With<Player>>,
 	time: Res<Time>,
 ) {
-	let (mut player_state, mut player_vulnerability, spell_queue) = query.single_mut();
+	let (mut player_state, mut player_vulnerability, spell_queue, player_health) = query.single_mut();
 	
 	player_vulnerability.hit_timer.tick(time.delta());
 	player_vulnerability.knockback_timer.tick(time.delta());
@@ -183,7 +185,7 @@ fn update_player_state(
 	// Update state
 	player_state.0 = match player_state.0 {
 		PlayerState::Normal | PlayerState::Casting => {
-			if spell_queue.is_empty() {
+			if spell_queue.is_empty() || player_health.health <= 0 {
 				PlayerState::Normal
 			} else {
 				PlayerState::Casting
@@ -205,7 +207,7 @@ fn update_player_state(
 
 const FLICKER_TIME: f32 = 0.1;
 fn flicker_if_intangible(
-	mut query: Query<(&mut Visibility, &PlayerVulnerability), With<Player>>,
+	mut query: Query<(&mut Visibility, &PlayerVulnerability, &PlayerHealth), With<Player>>,
 	time: Res<Time>,
     spell_ui_active: Res<ui::SpellUiActive>,
 ) {
@@ -213,10 +215,10 @@ fn flicker_if_intangible(
 		return;
 	}
 	
-	let (mut visibility, vulnerability) = query.single_mut();
+	let (mut visibility, vulnerability, health) = query.single_mut();
 	let current_time = time.time_since_startup().as_secs_f32();
 	
-	visibility.is_visible = vulnerability.tangible 
+	visibility.is_visible = (vulnerability.tangible && health.health > 0)
 		|| (current_time % (2.0 * FLICKER_TIME)) < FLICKER_TIME;
 }
 
@@ -329,6 +331,7 @@ impl PlayerVulnerability {
 }
 
 fn update_take_damage(
+	mut commands: Commands,
 	mut player_query: Query<(
 		&mut CurrentPlayerState, 
 		&mut PlayerHealth, 
@@ -336,6 +339,7 @@ fn update_take_damage(
 		&mut physics::Speed, 
 		&Transform
 	), With<Player>>,
+	mut message_events: EventWriter<ui::MessageEvent>,
 	damage_query: Query<(&enemy::DamagePlayerComponent, &Transform)>,
 	collisions: Res<physics::ActiveCollisions<physics::InteractsWithPlayer>>,
     spell_ui_active: Res<ui::SpellUiActive>,
@@ -358,6 +362,23 @@ fn update_take_damage(
 			
 			// take damage
 			player_health.health -= damage_component.0;
+			// Check if we just died
+			if player_health.health <= 0 && player_health.health + damage_component.0 > 0 {
+				// we just did; send an event
+				commands.spawn()
+					.insert(levels::CleanUpOnRoomLoad)
+					.insert(levels::DelayedRoomTransition::new(
+						levels::RoomTransitionEvent(levels::DestinationRoom::TargetRoom {
+							target: 1, // TODO update this when/if savepoints are introduced
+							respawn: true
+						}),
+						3.0
+					));
+				message_events.send(ui::MessageEvent {
+					message: Some("You have been defeated.".to_string()),
+					source: ui::MessageSource::Defeated,
+				});
+			}
 			
 			// knockback
 			current_state.0 = PlayerState::Knockback;
@@ -532,7 +553,7 @@ struct PlayerSpeed(Vec3);
 
 fn player_movement(
     action_state: Query<&ActionState<Action>, With<Player>>,
-    mut player_query: Query<(&mut physics::Speed, &CurrentPlayerState), With<Player>>,
+    mut player_query: Query<(&mut physics::Speed, &CurrentPlayerState, &PlayerHealth), With<Player>>,
     time: Res<Time>,
     spell_ui_active: Res<ui::SpellUiActive>,
 ) {
@@ -540,12 +561,12 @@ fn player_movement(
         return;
     }
     let action_state = action_state.single();
-    let (mut speed, player_state) = player_query.single_mut();
+    let (mut speed, player_state, player_health) = player_query.single_mut();
 
 	if player_state.0 != PlayerState::Knockback {
 		let mut total_offset = Vec2::splat(0.0);
 		
-		if player_state.0 == PlayerState::Normal {
+		if player_state.0 == PlayerState::Normal && player_health.health > 0 {
 			if action_state.pressed(Action::Up) {
 				total_offset.y -= 1.0;
 			}
@@ -615,7 +636,7 @@ fn update_speed(current_speed: f32, target_speed: f32, delta: f32) -> f32 {
 
 // Spellcasting
 pub fn update_spell_casting(
-    mut query: Query<(&Transform, &ActionState<Action>, &CurrentPlayerState, &PlayerHasStaff, &mut spells::RuneCastQueue, &mut PlayerMana), With<Player>>,
+    mut query: Query<(&Transform, &ActionState<Action>, &CurrentPlayerState, &PlayerHasStaff, &PlayerHealth, &mut spells::RuneCastQueue, &mut PlayerMana), With<Player>>,
     anim_query: Query<&PlayerAnimationState, With<PlayerSpriteMarker>>,
     camera_query: Query<(&Camera, &GlobalTransform)>,
     equipped: Res<spells::EquippedRunes>,
@@ -629,13 +650,14 @@ pub fn update_spell_casting(
         return;
     }
 
-    let (transform, action_state, player_state, has_staff, mut spell_queue, mut player_mana) = query.single_mut();
+    let (transform, action_state, player_state, has_staff, player_health, mut spell_queue, mut player_mana) = query.single_mut();
 	
-	// Don't do anything if we don't have the staff yet
-	if !has_staff.0 {
+	// Don't do anything if we don't have the staff yet or if we are dead
+	if !has_staff.0 || player_health.health <= 0 {
 		return;
 	}
 
+	// If we're taking damage, also don't do anything
 	if player_state.0 == PlayerState::Knockback {
 		spell_queue.clear();
 		return;
@@ -702,6 +724,46 @@ pub fn update_spell_casting(
 		spell_queue.clear();
     } else if action_state.just_pressed(Action::CancelSpell) {
 		spell_queue.clear();
+	}
+}
+
+
+pub fn do_respawn_events(
+	mut player_respawn_query: Query<(&mut PlayerHealth, &mut PlayerMana, &mut spells::RuneCastQueue), With<Player>>,
+	mut rune_inventory: ResMut<spells::RuneInventory>,
+	mut equipped_runes: ResMut<spells::EquippedRunes>,
+	mut events: EventReader<levels::RoomTransitionEvent>,
+) {
+	if let Some(levels::RoomTransitionEvent(levels::DestinationRoom::TargetRoom {
+		target: _,
+		respawn
+	})) = events.iter().next() {
+		if *respawn {
+			let (mut player_health, mut player_mana, mut spell_queue) = player_respawn_query.single_mut();
+			// TODO reset max health/mana to value from save point
+			player_health.health = player_health.max_health;
+			player_mana.mana = player_mana.max_mana;
+			spell_queue.clear();
+			
+			// Reset runes
+			// TODO read state from save point
+			*rune_inventory = spells::RuneInventory::new();
+			
+			// Clear any selected runes that are no longer unlocked
+			for i in 0..5 {
+				let remove = if let Some(Some(rune)) = equipped_runes.0.get(i) {
+					rune_inventory.0.iter().any(|inventory_slot| {
+						*rune == inventory_slot.rune
+						&& !inventory_slot.unlocked
+					})
+				} else {
+					false
+				};
+				if remove {
+					equipped_runes.set(i, None);
+				}
+			}
+		}
 	}
 }
 

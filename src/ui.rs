@@ -401,6 +401,7 @@ pub enum MessageSource {
 	Tutorial,
 	ObtainedRune,
 	Ending,
+	Defeated,
 }
 
 #[derive(Component)]

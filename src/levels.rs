@@ -16,14 +16,17 @@ impl Plugin for LevelsPlugin {
 			.add_event::<RoomTransitionEvent>()
 			.add_system(transition_to_room)
 			.add_system(update_gate)
-			.add_system(do_player_interaction);
+			.add_system(do_player_interaction)
+			.add_system(check_delayed_room_transitions);
 	}
 }
 
 #[derive(Component)]
 pub struct CleanUpOnRoomLoad;
 // Event for triggering a room transition
+#[derive(Clone, Copy)]
 pub struct RoomTransitionEvent(pub DestinationRoom);
+#[derive(Clone, Copy)]
 pub enum DestinationRoom {
 	NextRoom,
 	TargetRoom {
@@ -31,6 +34,34 @@ pub enum DestinationRoom {
 		respawn: bool,
 	},
 }
+#[derive(Component)]
+pub struct DelayedRoomTransition {
+	event: RoomTransitionEvent,
+	timer: Timer,
+}
+impl DelayedRoomTransition {
+	pub fn new(event: RoomTransitionEvent, secs: f32) -> Self {
+		Self {
+			event,
+			timer: Timer::from_seconds(secs, false)
+		}
+	}
+}
+fn check_delayed_room_transitions (
+	mut commands: Commands,
+	mut query: Query<(Entity, &mut DelayedRoomTransition)>,
+	time: Res<Time>,
+	mut events: EventWriter<RoomTransitionEvent>,
+) {
+	for (e, mut delayed_transition) in query.iter_mut() {
+		delayed_transition.timer.tick(time.delta());
+		if delayed_transition.timer.finished() {
+			commands.get_or_spawn(e).despawn();
+			events.send(delayed_transition.event);
+		}
+	}
+}
+
 // Resource to store the current room
 struct CurrentRoom(Option<usize>);
 
@@ -147,8 +178,8 @@ fn at_origin() -> SpatialBundle {
 	at_location(0.0, 0.0)
 }
 
-// Transition function.
-// Soon will be absolutely atrociously long.
+// Transition system.
+// Is absolutely atrociously long.
 fn transition_to_room(
 	mut commands: Commands,
 	asset_server: Res<AssetServer>,
@@ -185,7 +216,7 @@ fn transition_to_room(
 		}
 		
 		// Figure out room index
-		let (room_index, _respawn) = match &transition_event.0 {
+		let (room_index, respawn) = match &transition_event.0 {
 			DestinationRoom::NextRoom => if let Some(index) = current_room.0 {
 				(index + 1, false)
 			} else {
@@ -396,19 +427,20 @@ fn transition_to_room(
 			}
 			1 => { // ////////////////////////////////////////////////////////////////////////////////
 				// Messages
-				message_events.send(MessageEvent {
-						message: Some("Defeat all enemies in the room to unlock the gate.".to_string()),
-						source: MessageSource::Tutorial,
+				if !respawn {
+					message_events.send(MessageEvent {
+							message: Some("Defeat all enemies in the room to unlock the gate.".to_string()),
+							source: MessageSource::Tutorial,
+						});
+					commands.spawn().insert(MessageTrigger {
+						message_event: MessageEvent {
+							message: None,
+							source: MessageSource::Tutorial,
+						},
+						trigger_type: MessageTriggerType::OnTimer(Timer::from_seconds(4.0, false)),
+						next_message: None,
 					});
-				commands.spawn().insert(MessageTrigger {
-					message_event: MessageEvent {
-						message: None,
-						source: MessageSource::Tutorial,
-					},
-					trigger_type: MessageTriggerType::OnTimer(Timer::from_seconds(4.0, false)),
-					next_message: None,
-				});
-					
+				}
 				// Enemy
 				commands
 					.spawn_bundle(EnemyBundle::<AIPeriodicCharge>::new(
@@ -800,6 +832,19 @@ fn transition_to_room(
 						parent.spawn_bundle(shadow_texture.get_shadow_bundle(1));
 					});
 				
+				commands.spawn_bundle(at_location(0.0, 40.0))
+					.insert(CollisionSource::<InteractsWithPlayer>::new(Collider::Circle {
+						center: Vec2::ZERO,
+						radius: 12.0,
+					}))
+					.insert(PlayerInteraction::GiveRune(7)) // Scatter
+					.insert(CleanUpOnRoomLoad)
+					.with_children(|parent| {
+						parent.spawn_bundle(FacingSpriteBundle::new(level_textures.get_sprite("scroll"), 20.0))
+							.insert(SpriteHover::new(2.0, 6.0));
+						parent.spawn_bundle(shadow_texture.get_shadow_bundle(1));
+					});
+				
 				
 				(
 					Vec2::new(0.0, 130.0),
@@ -887,12 +932,26 @@ fn transition_to_room(
 					});
 				
 				// Scroll
-				commands.spawn_bundle(at_location(0.0, 00.0))
+				commands.spawn_bundle(at_location(60.0, 0.0))
 					.insert(CollisionSource::<InteractsWithPlayer>::new(Collider::Circle {
 						center: Vec2::ZERO,
 						radius: 12.0,
 					}))
 					.insert(PlayerInteraction::GiveRune(5)) // Line
+					.insert(CleanUpOnRoomLoad)
+					.with_children(|parent| {
+						parent.spawn_bundle(FacingSpriteBundle::new(level_textures.get_sprite("scroll"), 20.0))
+							.insert(SpriteHover::new(2.0, 6.0));
+						parent.spawn_bundle(shadow_texture.get_shadow_bundle(1));
+					});
+				
+				// Scroll
+				commands.spawn_bundle(at_location(-60.0, 0.0))
+					.insert(CollisionSource::<InteractsWithPlayer>::new(Collider::Circle {
+						center: Vec2::ZERO,
+						radius: 12.0,
+					}))
+					.insert(PlayerInteraction::GiveRune(0)) // Fire
 					.insert(CleanUpOnRoomLoad)
 					.with_children(|parent| {
 						parent.spawn_bundle(FacingSpriteBundle::new(level_textures.get_sprite("scroll"), 20.0))

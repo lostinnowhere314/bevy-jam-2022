@@ -202,7 +202,7 @@ impl EquippedRunes {
 #[derive(Debug)]
 pub struct RuneInventory(pub Vec<RuneInventorySlot>);
 impl RuneInventory {
-	fn new() -> Self {
+	pub fn new() -> Self {
 		RuneInventory(vec![
 			RuneInventorySlot {
 				rune: Rune::ElementRune(SpellElement::Fire),
