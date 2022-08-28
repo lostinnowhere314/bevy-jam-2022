@@ -603,13 +603,13 @@ fn transition_to_room(
 					.spawn_bundle(Wall::new(Vec2::new(160.0, -64.0), Vec2::new(208.0, -64.0), true))
 					.insert_bundle(at_origin());
 				commands
-					.spawn_bundle(Wall::new(Vec2::new(208.0, -64.0), Vec2::new(208.0, 80.0), true))
+					.spawn_bundle(Wall::new(Vec2::new(208.0, -64.0), Vec2::new(208.0, 160.0), true))
 					.insert_bundle(at_origin());
 				commands
-					.spawn_bundle(Wall::new(Vec2::new(208.0, 80.0), Vec2::new(-128.0, 80.0), true))
+					.spawn_bundle(Wall::new(Vec2::new(208.0, 160.0), Vec2::new(-128.0, 160.0), true))
 					.insert_bundle(at_origin());
 				commands
-					.spawn_bundle(Wall::new(Vec2::new(-128.0, 80.0), Vec2::new(-128.0, -64.0), true))
+					.spawn_bundle(Wall::new(Vec2::new(-128.0, 160.0), Vec2::new(-128.0, -64.0), true))
 					.insert_bundle(at_origin());
 				
 				
@@ -723,9 +723,9 @@ fn transition_to_room(
 							max_dev_angle: std::f32::consts::PI / 8.0,
 							..default()
 						},
-						60, 
+						50, 
 						2, 
-						0.75,
+						1.0,
 						Collider::Circle {
 							center: Vec2::ZERO,
 							radius: 10.0
@@ -748,9 +748,9 @@ fn transition_to_room(
 							max_dev_angle: std::f32::consts::PI / 8.0,
 							..default()
 						},
-						60, 
+						50, 
 						2, 
-						0.75,
+						1.0,
 						Collider::Circle {
 							center: Vec2::ZERO,
 							radius: 10.0
@@ -773,9 +773,9 @@ fn transition_to_room(
 							max_dev_angle: std::f32::consts::PI / 8.0,
 							..default()
 						},
-						60, 
+						50, 
 						2, 
-						0.75,
+						1.0,
 						Collider::Circle {
 							center: Vec2::ZERO,
 							radius: 10.0
@@ -798,7 +798,7 @@ fn transition_to_room(
 							max_dev_angle: std::f32::consts::PI / 8.0,
 							..default()
 						},
-						60, 
+						50, 
 						2, 
 						0.75,
 						Collider::Circle {
@@ -912,7 +912,7 @@ fn transition_to_room(
 				commands
 					.spawn_bundle(EnemyBundle::<AIRotateAround>::with_state(
 						AIRotateAround::default(),
-						80, 
+						100, 
 						3, 
 						0.5,
 						Collider::Circle {
