@@ -914,9 +914,9 @@ fn transition_to_room(
 				let n_seconds = total_time % 60.0;
 				message_events.send(MessageEvent {
 						message: Some(format!(
-							"You have reached the Tower of the Moon! Congratulations!\nYour time: {}:{:.3}",
+							"You have reached the Tower of the Moon! Congratulations!\nYour time: {}:{:0>5}",
 							n_minutes,
-							n_seconds,
+							format!("{:.3}", n_seconds),
 						).to_string()),
 						source: MessageSource::Ending,
 					});

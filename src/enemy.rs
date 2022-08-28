@@ -20,6 +20,7 @@ impl Plugin for EnemyPlugin {
 					.before(physics::update_movement)
 					.after(spells::process_spell_enemy_collisions)
 			)
+			.add_system(update_vulnerability)
 			.add_system(do_enemy_ai::<NoAI>.before(knockback_post_update))
 			.add_system(do_enemy_ai::<AIPeriodicCharge>.before(knockback_post_update))
 			.add_system(do_enemy_ai::<AIRotateAround>.before(knockback_post_update))
@@ -49,6 +50,7 @@ pub struct EnemyBundle<T: EnemyAIState> {
 	health: EnemyHealth,
 	collide_damage: DamagePlayerComponent,
 	speed: physics::Speed,
+	vulnerability: EnemyVulnerability,
 	own_damage_collider: physics::CollisionRecipient<physics::InteractsWithEnemies>,
 	player_damage_collider: physics::CollisionSource<physics::InteractsWithPlayer>,
 	player_space_collider: physics::SymmetricCollisionSource<physics::TakesSpace>,
@@ -97,6 +99,10 @@ impl<T: EnemyAIState> EnemyBundle<T> {
 			health: EnemyHealth(max_health, max_health),
 			collide_damage: DamagePlayerComponent(contact_damage),
 			speed: physics::Speed(Vec2::ZERO),
+			vulnerability: EnemyVulnerability {
+				tangible: true,
+				hit_timer: Timer::from_seconds(0.4, false)
+			},
 			own_damage_collider: physics::CollisionRecipient::<physics::InteractsWithEnemies>::new(collider.clone()),
 			player_damage_collider: physics::CollisionSource::<physics::InteractsWithPlayer>::new(collider.clone()),
 			player_space_collider: physics::SymmetricCollisionSource::<physics::TakesSpace>::new(collider.clone()),
@@ -158,6 +164,35 @@ pub struct AIGeneralState {
 
 #[derive(Component, Debug)]
 pub struct EnemyHealth(pub i32, pub i32);
+#[derive(Component, Debug)]
+pub struct EnemyVulnerability {
+	pub tangible: bool,
+	pub hit_timer: Timer,
+}
+
+const FLICKER_TIME: f32 = 0.14;
+// does hit timer and tangibility updates
+fn update_vulnerability (
+	mut query: Query<(&mut Visibility, &mut EnemyVulnerability), With<EnemyMarker>>,
+	time: Res<Time>,
+    spell_ui_active: Res<ui::SpellUiActive>, 
+) {
+	if spell_ui_active.0 {
+		return;
+	}
+	
+	let current_time = time.time_since_startup().as_secs_f32();
+	let should_flicker = (current_time % (2.0 * FLICKER_TIME)) < FLICKER_TIME;
+	
+	for (mut visibility, mut vulnerability) in query.iter_mut() {
+		if !vulnerability.tangible {
+			vulnerability.hit_timer.tick(time.delta());
+			vulnerability.tangible = vulnerability.hit_timer.finished();
+		}
+		
+		visibility.is_visible = vulnerability.tangible || should_flicker;
+	}
+}
 
 // General systems /////////////////////////////
 fn enemy_ai_general_update(

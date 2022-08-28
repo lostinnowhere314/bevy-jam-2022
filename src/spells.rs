@@ -533,20 +533,25 @@ impl SpellSize {
 /// Resolve spell-enemy collisions
 pub fn process_spell_enemy_collisions(
 	spell_query: Query<(&SpellData, &Transform, &physics::Speed), With<SpellMarker>>,
-	mut enemy_query: Query<(&mut enemy::EnemyHealth, &mut enemy::EnemyKnockbackComponent)>,
+	mut enemy_query: Query<(&mut enemy::EnemyHealth, &mut enemy::EnemyKnockbackComponent, &mut enemy::EnemyVulnerability)>,
 	collisions: Res<physics::ActiveCollisions<physics::InteractsWithEnemies>>,
 	mut spell_despawn_events: EventWriter<SpellDespawnEvent>,
 	mut create_spell_events: EventWriter<CreateSpellEvent>,
 ) {
 	for collision in collisions.iter() {
 		if let (
-			Ok((spell_data, transform, speed)), Ok((mut enemy_health, mut enemy_knockback))
+			Ok((spell_data, transform, speed)), Ok((mut enemy_health, mut enemy_knockback, mut enemy_vulnerability))
 		) = (
 			spell_query.get(collision.source_entity), enemy_query.get_mut(collision.recip_entity)
 		) {
+			if !enemy_vulnerability.tangible {
+				continue;
+			}
 			// Do damage
 			if spell_data.get_damage() > 0 {
 				enemy_health.0 -= spell_data.get_damage();
+				enemy_vulnerability.tangible = false;
+				enemy_vulnerability.hit_timer.reset();
 			}
 			// Apply knockback
 			enemy_knockback.0 = speed.normalize_or_zero() * spell_data.knockback;
