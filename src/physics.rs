@@ -67,13 +67,13 @@ impl Wall {
 }
 
 fn do_wall_collisions (
-	wall_query: Query<(&Transform, &WallInsideDirection), Without<CollisionRecipient<WallCollidable>>>,
+	wall_query: Query<&WallInsideDirection, Without<CollisionRecipient<WallCollidable>>>,
 	mut recip_query: Query<&mut Transform, With<CollisionRecipient<WallCollidable>>>,
 	collisions: Res<ActiveCollisions<WallCollidable>>
 ) {
 	for collision in collisions.iter() {
 		// Get collidees from queries
-		if let (Ok((wall_transform, wall)), Ok(mut other_transform)) = (
+		if let (Ok(wall), Ok(mut other_transform)) = (
 			wall_query.get(collision.source_entity),
 			recip_query.get_mut(collision.recip_entity),
 		) {
@@ -82,14 +82,14 @@ fn do_wall_collisions (
 				Collider::Circle {center: real_center, radius},
 				Collider::LineSegment(point1, _point2)
 			) = (
-				collision.recip_collider.with_transform(&other_transform),
-				collision.source_collider.with_transform(&wall_transform),
+				&collision.recip_collider,
+				&collision.source_collider,
 			) {
 				// Check the current projected distance
-				let recip_rel_pos = real_center - point1;
+				let recip_rel_pos = *real_center - *point1;
 				let dist = wall.0.dot(recip_rel_pos);
-				if dist < radius {
-					other_transform.translation += expand_vec2(wall.0 * (radius - dist));
+				if dist < *radius {
+					other_transform.translation += expand_vec2(wall.0 * (*radius - dist));
 				}
 			} else {
 				panic!("invalid WallCollidable recipient Collider; must be Collider::Circle");
