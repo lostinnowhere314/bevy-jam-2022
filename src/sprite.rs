@@ -1,5 +1,5 @@
 use super::ui;
-use bevy::{prelude::*, transform::transform_propagate_system};
+use bevy::{prelude::*, transform::transform_propagate_system, utils::Duration};
 
 #[derive(Component, Debug, Default)]
 pub struct FacingSpriteMarker;
@@ -18,6 +18,7 @@ impl Plugin for FacingSpritePlugin {
 				facing_sprite_update.before(transform_propagate_system),
 			)
 			.add_system(simple_animation_update)
+			.add_system(hover_update)
 			.add_system_to_stage(CoreStage::PreUpdate, pause_animation_timers);
     }
 }
@@ -102,6 +103,45 @@ pub fn facing_sprite_update(
 
 #[derive(Component, Deref, DerefMut)]
 pub struct AnimationTimer(pub Timer);
+
+// Hovering up and down
+#[derive(Component)]
+pub struct SpriteHover {
+	pub frequency: f32,
+	pub amplitude: f32,
+	time_elapsed: Duration,
+}
+impl SpriteHover {
+	pub fn new(period: f32, amplitude: f32) -> Self {
+		Self {
+			frequency: 1.0 / period,
+			amplitude,
+			time_elapsed: Duration::from_secs(0)
+		}
+	}
+}
+
+fn hover_update(
+    time: Res<Time>,
+    mut query: Query<(
+        &mut SpriteHover,
+        &mut SpriteOffset
+    )>,
+    spell_ui_active: Res<ui::SpellUiActive>,
+) {
+	if spell_ui_active.0 {
+		return;
+	}
+	
+	for (mut hover, mut offset) in query.iter_mut() {
+		let prev_sine = (hover.time_elapsed.as_secs_f32() * hover.frequency * std::f32::consts::TAU).sin();
+		hover.time_elapsed += time.delta();
+		let new_sine = (hover.time_elapsed.as_secs_f32() * hover.frequency * std::f32::consts::TAU).sin();
+		
+		offset.0.y += hover.amplitude * (new_sine - prev_sine);
+	}
+}
+
 /// Simple looping animations
 /// bool is whether animation should go forward
 #[derive(Component)]

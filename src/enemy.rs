@@ -93,7 +93,7 @@ impl<T: EnemyAIState> EnemyBundle<T> {
 				has_noticed_player: false,
 				view_radius: 130.0,
 			},
-			health: EnemyHealth(max_health),
+			health: EnemyHealth(max_health, max_health),
 			collide_damage: DamagePlayerComponent(contact_damage),
 			speed: physics::Speed(Vec2::ZERO),
 			own_damage_collider: physics::CollisionRecipient::<physics::InteractsWithEnemies>::new(collider.clone()),
@@ -156,11 +156,11 @@ pub struct AIGeneralState {
 }
 
 #[derive(Component, Debug)]
-pub struct EnemyHealth(pub i32);
+pub struct EnemyHealth(pub i32, pub i32);
 
 // General systems /////////////////////////////
 fn enemy_ai_general_update(
-	mut query: Query<(&mut AIGeneralState, &Transform), Without<player::Player>>,
+	mut query: Query<(&mut AIGeneralState, &Transform, &EnemyHealth), Without<player::Player>>,
 	player_query: Query<&Transform, With<player::Player>>,
     spell_ui_active: Res<ui::SpellUiActive>,
 ) {
@@ -169,9 +169,12 @@ fn enemy_ai_general_update(
 	}
 	let player_pos = player_query.single().translation;
 	
-	for (mut state, transform) in query.iter_mut() {
+	for (mut state, transform, health) in query.iter_mut() {
 		let pos = transform.translation;
-		if !state.has_noticed_player && pos.distance(player_pos) < state.view_radius {
+		if !state.has_noticed_player && (
+			pos.distance(player_pos) < state.view_radius
+			|| health.0 < health.1
+		) {
 			state.has_noticed_player = true;
 		}
 	}

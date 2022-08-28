@@ -220,7 +220,8 @@ fn transition_to_room(
 						parent.spawn_bundle(FacingSpriteBundle::new(
 							asset_server.load("player/staff.png"),
 							22.0
-						));
+						))
+						.insert(SpriteHover::new(1.3, 2.0));
 						parent.spawn_bundle(shadow_texture.get_shadow_bundle(0));
 					});
 				// Set up some tutorial messages
@@ -317,7 +318,8 @@ fn transition_to_room(
 							spell_textures.get_atlas_from_type(SpellElement::Fire, SpellSize::Large), 
 							20.0,
 							false
-						));
+						))
+						.insert(SpriteHover::new(3.0, 2.0));
 						parent.spawn_bundle(shadow_texture.get_shadow_bundle(2));
 					});
 				commands
@@ -337,7 +339,8 @@ fn transition_to_room(
 							spell_textures.get_atlas_from_type(SpellElement::Fire, SpellSize::Large), 
 							20.0,
 							false
-						));
+						))
+						.insert(SpriteHover::new(3.0, 2.0));
 						parent.spawn_bundle(shadow_texture.get_shadow_bundle(2));
 					});
 				
@@ -421,22 +424,10 @@ fn transition_to_room(
 							enemy_textures.get_sprite("spiky"), 
 							20.0,
 							false
-						));
+						))
+						.insert(SpriteHover::new(1.5, 3.0));
 						parent.spawn_bundle(shadow_texture.get_shadow_bundle(2));
 					});
-				
-				// Scroll to test unlocking runes
-				/*commands.spawn_bundle(at_location(0.0, 40.0))
-					.insert(CollisionSource::<InteractsWithPlayer>::new(Collider::Circle {
-						center: Vec2::ZERO,
-						radius: 12.0,
-					}))
-					.insert(PlayerInteraction::GiveRune(6))
-					.insert(CleanUpOnRoomLoad)
-					.with_children(|parent| {
-						parent.spawn_bundle(FacingSpriteBundle::new(level_textures.get_sprite("scroll"), 20.0));
-						parent.spawn_bundle(shadow_texture.get_shadow_bundle(1));
-					});*/
 				
 				// Walls
 				commands
@@ -533,7 +524,8 @@ fn transition_to_room(
 							enemy_textures.get_sprite("spiky"), 
 							20.0,
 							false
-						));
+						))
+						.insert(SpriteHover::new(1.5, 3.0));
 						parent.spawn_bundle(shadow_texture.get_shadow_bundle(2));
 					});
 				commands
@@ -551,7 +543,8 @@ fn transition_to_room(
 							enemy_textures.get_sprite("spiky"), 
 							20.0,
 							true
-						));
+						))
+						.insert(SpriteHover::new(1.5, 3.0));
 						parent.spawn_bundle(shadow_texture.get_shadow_bundle(2));
 					});
 				
@@ -564,7 +557,8 @@ fn transition_to_room(
 					.insert(PlayerInteraction::GiveRune(6))
 					.insert(CleanUpOnRoomLoad)
 					.with_children(|parent| {
-						parent.spawn_bundle(FacingSpriteBundle::new(level_textures.get_sprite("scroll"), 20.0));
+						parent.spawn_bundle(FacingSpriteBundle::new(level_textures.get_sprite("scroll"), 20.0))
+							.insert(SpriteHover::new(2.0, 6.0));
 						parent.spawn_bundle(shadow_texture.get_shadow_bundle(1));
 					});
 				
