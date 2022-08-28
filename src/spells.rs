@@ -144,7 +144,12 @@ fn create_spell_recursive(runes: &[Rune], power_factor: f32) -> Option<SpellData
 		+ layer_shape.get_cost_multiplier() * sub_cost;
 	
 	// Determine spell size //////////////////////////////////////////////
-	let size_factor = spell_magnitude * power_factor;
+	let size_factor = spell_magnitude * power_factor * (
+		match layer_shape {
+			SpellShape::NoShape => 1.5,
+			_ => 1.0
+		}
+	);
 	let spell_size = SpellSize::from_size_factor(size_factor);
 	
 	// Speed //////////////////////////////////////////////
@@ -319,14 +324,14 @@ impl SpellElement {
 		match self {
 			Self::Neutral => 1.0,
 			Self::Fire => 1.0,
-			Self::Water => 0.5,
-			Self::Earth => 2.0,
-			Self::Air => 1.5,
-			Self::Metal => 2.0,
-			Self::Plant => 0.8,
-			Self::Electric => 3.0,
+			Self::Water => 0.7,
+			Self::Earth => 1.4,
+			Self::Air => 1.2,
+			Self::Metal => 1.5,
+			Self::Plant => 0.85,
+			Self::Electric => 1.8,
 			Self::Ice => 1.0,
-			Self::Light => 3.0,
+			Self::Light => 2.0,
 		}
 	}
 	
@@ -336,10 +341,10 @@ impl SpellElement {
 			Self::Fire => 1.0,
 			Self::Water => 0.8,
 			Self::Earth => 0.8,
-			Self::Air => 0.5,
+			Self::Air => 0.7,
 			Self::Metal => 1.4,
 			Self::Plant => 0.8,
-			Self::Electric => 2.0,
+			Self::Electric => 1.8,
 			Self::Ice => 1.4,
 			Self::Light => 5.0,
 		}
@@ -349,13 +354,13 @@ impl SpellElement {
 		match self {
 			Self::Neutral => 0.1,
 			Self::Fire => 0.7,
-			Self::Water => 1.5,
+			Self::Water => 1.3,
 			Self::Earth => 1.0,
-			Self::Air => 1.8,
+			Self::Air => 1.5,
 			Self::Metal => 1.0,
-			Self::Plant => 2.5,
+			Self::Plant => 2.0,
 			Self::Electric => 0.1,
-			Self::Ice => 1.8,
+			Self::Ice => 1.5,
 			Self::Light => 0.4,
 		}
 	}
@@ -425,7 +430,7 @@ impl SpellShape {
 	/// Applies to the current layer
 	fn get_damage_multiplier(&self) -> f32 {
 		match self {
-			Self::NoShape => 1.0,
+			Self::NoShape => 2.0,
 			Self::Orb => 1.0,
 			Self::Line => 1.0,
 			Self::Burst => 0.7,
@@ -447,7 +452,7 @@ impl SpellShape {
 	/// Applies to the layer below
 	fn get_power_multiplier(&self) -> f32 {
 		match self {
-			Self::NoShape => 1.2,
+			Self::NoShape => 1.5,
 			Self::Orb => 1.0,
 			Self::Line => 0.6,
 			Self::Burst => 0.6,
@@ -459,10 +464,10 @@ impl SpellShape {
 	fn get_base_speed(&self) -> f32 {
 		match self {
 			Self::NoShape => 0.0,
-			Self::Orb => 80.0,
-			Self::Line => 120.0,
-			Self::Burst => 160.0,
-			Self::Scatter => 160.0,
+			Self::Orb => 90.0,
+			Self::Line => 110.0,
+			Self::Burst => 130.0,
+			Self::Scatter => 130.0,
 		}
 	}
 	
@@ -476,7 +481,7 @@ impl SpellShape {
 			Self::Scatter => 1.0,
 		};
 		
-		100.0 * multiplier
+		4.0 * multiplier
 	}
 	
 	fn get_num_projectiles(&self) -> i32 {
