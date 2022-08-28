@@ -1,5 +1,5 @@
 use super::{player, spells, levels};
-use bevy::{math::Vec4Swizzles, prelude::*, utils::HashMap};
+use bevy::{prelude::*, utils::HashMap};
 use leafwing_input_manager::prelude::*;
 
 pub struct UIPlugin;
@@ -850,7 +850,7 @@ pub fn get_cursor_world_position(
     camera: &Camera,
     camera_transform: &GlobalTransform,
     plane_point: Vec3,
-    plane_normal: Vec3,
+    _plane_normal: Vec3,
 ) -> Option<Vec3> {
     let cursor_screen_pos = get_cursor_position(windows)?;
 
@@ -859,8 +859,8 @@ pub fn get_cursor_world_position(
         (200.0 - cursor_screen_pos.y) / 200.0,
     );
 
-    // funny linear algebra time
-    let A = camera.projection_matrix() * camera_transform.compute_matrix().inverse();
+    // funny linear algebra way that has a bug that I don't have time to find
+    /*let A = camera.projection_matrix() * camera_transform.compute_matrix().inverse();
 
     let x: Vec4 = scaled_screen_pos.extend(0.0).extend(0.0);
     let n: Vec3 = plane_normal.normalize();
@@ -870,16 +870,20 @@ pub fn get_cursor_world_position(
     let rhs = A.transpose() * x + n_hat * n.dot(p);
     let lhs = A.transpose() * A + outer_product(n_hat, n_hat);
 
-    Some((lhs.inverse() * rhs).xyz())
-}
-
-fn outer_product(left: Vec4, other: Vec4) -> Mat4 {
-    Mat4::from_cols(
-        left * other.x,
-        left * other.y,
-        left * other.z,
-        left * other.w,
-    )
+    Some((lhs.inverse() * rhs).xyz())*/
+	
+	// More hardcoded version
+	let loc_camera_transform = camera_transform.compute_transform();
+	let world_x = scaled_screen_pos.x * 160.0 + loc_camera_transform.translation.x;
+	
+	// determine how y and z are projected
+	let world_proj_matrix = camera.projection_matrix() * camera_transform.compute_matrix().inverse();
+	let proj_y = (world_proj_matrix * Vec3::Y.extend(0.0)).y;
+	let proj_z = (world_proj_matrix * Vec3::Z.extend(0.0)).y;
+	
+	let z_val = (scaled_screen_pos.y - plane_point.y * proj_y) / proj_z;
+	
+	Some(Vec3::new(world_x, plane_point.y, z_val))
 }
 
 // System to keep track of what the mouse is over
