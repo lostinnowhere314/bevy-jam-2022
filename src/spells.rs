@@ -17,13 +17,14 @@ impl Plugin for SpellPlugin {
             .add_startup_system(setup_spell_sprites)
 			.add_startup_system(setup_rune_sprites)
 			.add_system(process_spell_enemy_collisions)
+			.add_system(update_spell_lifetimes)
+			.add_system(create_spells_from_events
+				.after(process_spell_enemy_collisions))
 			.add_system_to_stage(
 				CoreStage::PostUpdate,
 				despawn_spells
 					.before(physics::resolve_collisions::<physics::InteractsWithEnemies>)
-			)
-			.add_system(create_spells_from_events
-				.after(process_spell_enemy_collisions));
+			);
     }
 }
 
@@ -256,6 +257,20 @@ pub struct SpellData {
 	knockback: f32,
 	on_collide: Option<Box<SpellData>>,
 	on_end: Option<Box<SpellData>>,
+}
+#[derive(Component)]
+pub struct SpellLifetime(Timer);
+fn update_spell_lifetimes(
+	mut timer_query: Query<(Entity, &mut SpellLifetime)>,
+	time: Res<Time>,
+	mut despawn_events: EventWriter<SpellDespawnEvent>,
+) {
+	for (e, mut timer) in timer_query.iter_mut() {
+		timer.0.tick(time.delta());
+		if timer.0.just_finished() {
+			despawn_events.send(SpellDespawnEvent(e));
+		}
+	}
 }
 
 impl SpellData {
@@ -622,6 +637,7 @@ fn create_spells_from_events(
 				.insert(SpellMarker)
 				.insert(event.spell_data.clone())
 				.insert(levels::CleanUpOnRoomLoad)
+				.insert(SpellLifetime(Timer::from_seconds(5.0, false)))
 				.insert(physics::CollisionSource::<physics::InteractsWithEnemies>::new(
 					physics::Collider::Circle {
 						center: Vec2::ZERO,
