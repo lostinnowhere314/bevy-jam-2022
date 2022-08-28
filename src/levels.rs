@@ -5,6 +5,7 @@ use bevy::{
 };
 use bevy_turborand::*;
 use super::{enemy, sprite, spells, physics, player, ui, expand_vec2};
+use ui::{MessageTrigger, MessageEvent, MessageSource, MessageTriggerType};
 
 pub struct LevelsPlugin;
 impl Plugin for LevelsPlugin {
@@ -38,6 +39,7 @@ struct CurrentRoom(Option<usize>);
 pub enum PlayerInteraction {
 	GiveStaff,
 	RoomTransition,
+	GiveRune(usize),
 }
 
 fn do_player_interaction(
@@ -47,6 +49,8 @@ fn do_player_interaction(
 	// For doing the interactions
 	mut staff_events: EventWriter<player::GiveStaffEvent>,
 	mut transition_events: EventWriter<RoomTransitionEvent>,
+	mut message_events: EventWriter<MessageEvent>,
+	mut rune_inventory: ResMut<spells::RuneInventory>,
 ) {	
 	for collision in collisions.iter() {
 		if let Ok((e, interaction)) = interact_query.get(collision.source_entity) {
@@ -57,6 +61,25 @@ fn do_player_interaction(
 				},
 				PlayerInteraction::RoomTransition => {
 					transition_events.send(RoomTransitionEvent(DestinationRoom::NextRoom));
+					commands.entity(e).despawn_recursive();
+				}
+				PlayerInteraction::GiveRune(i) => {
+					rune_inventory.0.get_mut(*i).expect("invalid rune id in GiveRune").unlocked = true;
+					// Send a message
+					message_events.send(MessageEvent {
+						message: Some("Obtained a rune!".to_string()),
+						source: MessageSource::ObtainedRune,
+					});
+					commands.spawn().insert(MessageTrigger {
+						message_event: MessageEvent {
+							message: None,
+							source: MessageSource::ObtainedRune,
+						},
+						trigger_type: MessageTriggerType::OnTimer(Timer::from_seconds(4.0, false)),
+						next_message: None,
+					});
+					
+					
 					commands.entity(e).despawn_recursive();
 				}
 			}
@@ -94,6 +117,7 @@ fn load_level_sprites(
 ) {
 	let handles = [
 		("gate", "level/gate.png"),
+		("scroll", "level/scroll.png"),
 		("bg0", "level/bg-forest.png"),
 	].iter()
 		.map(|(key, path)| {
@@ -104,7 +128,6 @@ fn load_level_sprites(
 	commands.insert_resource(LevelSprites(handles));
 }
 
-use ui::{MessageTrigger, MessageEvent, MessageSource, MessageTriggerType};
 use sprite::*;
 use enemy::*;
 use physics::*;
@@ -192,7 +215,7 @@ fn transition_to_room(
 						radius: 12.0,
 					}))
 					.insert(PlayerInteraction::GiveStaff)
-					.insert_bundle(at_location(100.0,0.0))
+					.insert_bundle(at_location(100.0,16.0))
 					.with_children(|parent| {
 						parent.spawn_bundle(FacingSpriteBundle::new(
 							asset_server.load("player/staff.png"),
@@ -287,7 +310,7 @@ fn transition_to_room(
 							center: Vec2::ZERO,
 							radius: 8.0
 						}, 
-						at_location(-32.0,-56.0),
+						at_location(-32.0,-54.0),
 						&mut global_rng
 					)).with_children(|parent| {
 						parent.spawn_bundle(SimpleAnimationBundle::new(
@@ -307,7 +330,7 @@ fn transition_to_room(
 							center: Vec2::ZERO,
 							radius: 8.0
 						}, 
-						at_location(32.0,-56.0),
+						at_location(32.0,-54.0),
 						&mut global_rng
 					)).with_children(|parent| {
 						parent.spawn_bundle(SimpleAnimationBundle::new(
@@ -351,18 +374,18 @@ fn transition_to_room(
 					.spawn_bundle(Wall::new(Vec2::new(32.0, -64.0), Vec2::new(128.0, -64.0), true))
 					.insert_bundle(at_origin());
 				commands
-					.spawn_bundle(Wall::new(Vec2::new(128.0, -64.0), Vec2::new(128.0, 64.0), true))
+					.spawn_bundle(Wall::new(Vec2::new(128.0, -64.0), Vec2::new(128.0, 80.0), true))
 					.insert_bundle(at_origin());
 				commands
-					.spawn_bundle(Wall::new(Vec2::new(-128.0, 64.0), Vec2::new(-128.0, -64.0), true))
+					.spawn_bundle(Wall::new(Vec2::new(-128.0, 80.0), Vec2::new(-128.0, -64.0), true))
 					.insert_bundle(at_origin());
 				commands
-					.spawn_bundle(Wall::new(Vec2::new(128.0, 64.0), Vec2::new(-128.0, 64.0), true))
+					.spawn_bundle(Wall::new(Vec2::new(128.0, 80.0), Vec2::new(-128.0, 80.0), true))
 					.insert_bundle(at_origin());
 				
 				// Data needed for all the things
 				(
-					Vec2::new(-50.0, 0.0),
+					Vec2::new(-100.0, 0.0),
 					(0.0, 0.0),
 					Color::hex("75A743").unwrap()
 				)
@@ -377,7 +400,7 @@ fn transition_to_room(
 							center: Vec2::ZERO,
 							radius: 8.0
 						}, 
-						at_location(60.0,0.0),
+						at_location(120.0,0.0),
 						&mut global_rng
 					)).with_children(|parent| {
 						parent.spawn_bundle(SimpleAnimationBundle::new(
@@ -388,9 +411,22 @@ fn transition_to_room(
 						parent.spawn_bundle(shadow_texture.get_shadow_bundle(2));
 					});
 				
+				// Scroll to test unlocking runes
+				/*commands.spawn_bundle(at_location(0.0, 40.0))
+					.insert(CollisionSource::<InteractsWithPlayer>::new(Collider::Circle {
+						center: Vec2::ZERO,
+						radius: 12.0,
+					}))
+					.insert(PlayerInteraction::GiveRune(6))
+					.insert(CleanUpOnRoomLoad)
+					.with_children(|parent| {
+						parent.spawn_bundle(FacingSpriteBundle::new(level_textures.get_sprite("scroll"), 20.0));
+						parent.spawn_bundle(shadow_texture.get_shadow_bundle(1));
+					});*/
+				
 				(
-					Vec2::new(-50.0, 0.0),
-					(0.0, 160.0),
+					Vec2::new(-150.0, 40.0),
+					(0.0, 80.0),
 					Color::hex("75A743").unwrap()
 				)
 			}
