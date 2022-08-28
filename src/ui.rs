@@ -575,7 +575,7 @@ fn do_message_triggers(
 				!spell_query.is_empty()
 			},
 			MessageTriggerType::OnGateOpened => {
-				!gate_query.is_empty()
+				gate_query.is_empty()
 			},
 		};
 		if is_activated {
